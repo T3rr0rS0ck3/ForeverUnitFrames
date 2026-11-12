@@ -1,6 +1,7 @@
 name: Release
 
 # Ein Tag wie v0.2.0 pushen -> ZIP bauen und GitHub-Release erstellen.
+# Die Version in der ZIP-.toc wird automatisch aus dem Tag gesetzt.
 # Manuell starten (workflow_dispatch) -> nur ZIP bauen, als Workflow-Artefakt zum Testen.
 on:
   push:
@@ -20,31 +21,28 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Version aus der .toc lesen
+      # Die Version kommt aus dem Tag (v0.3.0 -> 0.3.0), bei manuellem Start "dev-<commit>"
+      - name: Version bestimmen
         id: version
         run: |
-          VERSION=$(grep -m1 '^## Version:' "$ADDON.toc" | sed 's/^## Version:[[:space:]]*//' | tr -d '\r')
-          if [ -z "$VERSION" ]; then
-            echo "::error::Keine '## Version:' in $ADDON.toc gefunden"
-            exit 1
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="dev-${GITHUB_SHA::7}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Version aus der .toc: $VERSION"
-
-      - name: Tag mit .toc-Version vergleichen
-        if: github.ref_type == 'tag'
-        run: |
-          if [ "${GITHUB_REF_NAME#v}" != "${{ steps.version.outputs.version }}" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME passt nicht zur .toc-Version ${{ steps.version.outputs.version }}"
-            exit 1
-          fi
+          echo "Version: $VERSION"
 
       - name: ZIP bauen
         id: zip
         run: |
-          ZIP="$ADDON-${{ steps.version.outputs.version }}.zip"
+          VERSION="${{ steps.version.outputs.version }}"
+          ZIP="$ADDON-$VERSION.zip"
           mkdir -p "build/$ADDON"
           cp "$ADDON.toc" *.lua "build/$ADDON/"
+          # Version in die .toc der ZIP schreiben (die .toc im Repo bleibt unverändert)
+          sed -i "s/^## Version:.*/## Version: $VERSION/" "build/$ADDON/$ADDON.toc"
+          grep '^## Version:' "build/$ADDON/$ADDON.toc"
           mkdir -p "build/$ADDON/Media"
           cp Media/*.tga "build/$ADDON/Media/"
           (cd build && zip -r -9 "../$ZIP" "$ADDON")
