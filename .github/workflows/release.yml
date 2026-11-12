@@ -18,7 +18,7 @@ jobs:
   release:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Version aus der .toc lesen
         id: version
@@ -52,7 +52,7 @@ jobs:
           echo "file=$ZIP" >> "$GITHUB_OUTPUT"
 
       - name: ZIP als Artefakt ablegen
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ${{ steps.zip.outputs.file }}
           path: ${{ steps.zip.outputs.file }}
