@@ -1,4 +1,4 @@
--- ForeverFrames: Kern (Datenbank, Profile, Events, Slash-Befehl)
+-- ForeverUnitFrames: Kern (Datenbank, Profile, Events, Slash-Befehl)
 local ADDON, ns = ...
 
 ns.frames = {}
@@ -81,8 +81,8 @@ local function CharKey()
 end
 
 function ns:InitDB()
-    ForeverFramesDB = ForeverFramesDB or {}
-    local db = ForeverFramesDB
+    ForeverUnitFramesDB = ForeverUnitFramesDB or {}
+    local db = ForeverUnitFramesDB
     db.profiles = db.profiles or {}
     db.chars = db.chars or {}
     if not db.profiles["Standard"] then
@@ -180,7 +180,7 @@ function ns:ApplyAll()
     if InCombatLockdown() then
         if not pendingApply then
             pendingApply = true
-            print("|cffd8a64aForeverFrames:|r Änderung wird nach dem Kampf übernommen.")
+            print("|cffd8a64aForeverUnitFrames:|r Änderung wird nach dem Kampf übernommen.")
         end
         -- Farben und Texte gehen auch im Kampf
         for _, f in pairs(ns.frames) do ns.Try(f.UpdateAll, f) end
@@ -264,12 +264,12 @@ SlashCmdList.FOREVERFRAMES = function(msg)
         if not InCombatLockdown() then ShowUIPanel(EditModeManagerFrame) end
     elseif msg == "unlock" or msg == "lock" then
         if InCombatLockdown() then
-            print("|cffd8a64aForeverFrames:|r Im Kampf nicht möglich.")
+            print("|cffd8a64aForeverUnitFrames:|r Im Kampf nicht möglich.")
             return
         end
         ns.profile.locked = (msg == "lock")
         ns:ApplyAll()
-        print("|cffd8a64aForeverFrames:|r Rahmen " .. (ns.profile.locked and "gesperrt." or "entsperrt. Mit der Maus verschieben, danach /ff lock."))
+        print("|cffd8a64aForeverUnitFrames:|r Rahmen " .. (ns.profile.locked and "gesperrt." or "entsperrt. Mit der Maus verschieben, danach /ff lock."))
     else
         ns:ToggleOptions()
     end

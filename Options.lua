@@ -1,5 +1,5 @@
--- ForeverFrames: Einstellungen unter Optionen → AddOns
--- Hauptseite "ForeverFrames" (Optik) mit Unterseiten Spieler, Ziel, Profile
+-- ForeverUnitFrames: Einstellungen unter Optionen → AddOns
+-- Hauptseite "ForeverUnitFrames" (Optik) mit Unterseiten Spieler, Ziel, Profile
 local _, ns = ...
 
 local refreshers = {}
@@ -252,7 +252,7 @@ local function BuildMain(page)
     title:SetFont(STANDARD_TEXT_FONT, 26, "")
     title:SetTextColor(GOLD[1], GOLD[2], GOLD[3])
     title:SetPoint("TOPLEFT", logo, "TOPRIGHT", 12, -18)
-    title:SetText("ForeverFrames")
+    title:SetText("ForeverUnitFrames")
 
     local meta = (C_AddOns and C_AddOns.GetAddOnMetadata) or GetAddOnMetadata
     local version = meta and meta(ADDON, "Version") or ""
@@ -275,7 +275,7 @@ local function BuildMain(page)
     guide:SetWordWrap(true)
     guide:SetText(table.concat({
         H .. "Einstellungen|r",
-        "Links unter ForeverFrames findest du die Seiten Spieler, Ziel und Profile. Jeder Frame hat dort seine eigene Größe, Farbe, Textur und sein eigenes Portrait.",
+        "Links unter ForeverUnitFrames findest du die Seiten Spieler, Ziel und Profile. Jeder Frame hat dort seine eigene Größe, Farbe, Textur und sein eigenes Portrait.",
         "",
         H .. "Verschieben|r",
         "Über Esc den Bearbeitungsmodus öffnen und die blau markierten Frames ziehen. Beim Loslassen rasten sie am anderen Frame ein (gleiche Höhe, untereinander oder spiegelbildlich) und, falls aktiviert, am Raster.",
@@ -483,7 +483,7 @@ local function BuildProfiles(p)
         if ns:NewProfile(eb:GetText()) then
             eb:SetText(""); eb:ClearFocus(); Refresh()
         else
-            print("|cffd8a64aForeverFrames:|r Name fehlt oder ist schon vergeben.")
+            print("|cffd8a64aForeverUnitFrames:|r Name fehlt oder ist schon vergeben.")
         end
     end
     newBtn:SetScript("OnClick", CreateNew)
@@ -530,17 +530,17 @@ function ns:CreateOptions()
     BuildProfiles(profC)
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
-        local cat = Settings.RegisterCanvasLayoutCategory(main, "ForeverFrames")
+        local cat = Settings.RegisterCanvasLayoutCategory(main, "ForeverUnitFrames")
         Settings.RegisterCanvasLayoutSubcategory(cat, player, "Spieler")
         Settings.RegisterCanvasLayoutSubcategory(cat, target, "Ziel")
         Settings.RegisterCanvasLayoutSubcategory(cat, prof, "Profile")
         Settings.RegisterAddOnCategory(cat)
         ns.settingsCategory = cat
     elseif InterfaceOptions_AddCategory then
-        main.name = "ForeverFrames"
-        player.name, player.parent = "Spieler", "ForeverFrames"
-        target.name, target.parent = "Ziel", "ForeverFrames"
-        prof.name, prof.parent = "Profile", "ForeverFrames"
+        main.name = "ForeverUnitFrames"
+        player.name, player.parent = "Spieler", "ForeverUnitFrames"
+        target.name, target.parent = "Ziel", "ForeverUnitFrames"
+        prof.name, prof.parent = "Profile", "ForeverUnitFrames"
         for _, pg in ipairs({ main, player, target, prof }) do InterfaceOptions_AddCategory(pg) end
         ns.legacyPanel = main
     end

@@ -1,4 +1,4 @@
--- ForeverFrames: Debuffs und Buffs für Spieler und Ziel
+-- ForeverUnitFrames: Debuffs und Buffs für Spieler und Ziel
 local _, ns = ...
 
 local MAX_AURAS   = 24

@@ -1,4 +1,4 @@
--- ForeverFrames: Spieler- und Ziel-Frame (Design "Schiefer")
+-- ForeverUnitFrames: Spieler- und Ziel-Frame (Design "Schiefer")
 local ADDON, ns = ...
 
 local W        = 260   -- Breite des Balkenkastens
@@ -462,7 +462,7 @@ local function OrnamentInfo(kind)
     ornCache[kind] = found
     if not found and not ornWarned then
         ornWarned = true
-        print("|cffd8a64aForeverFrames:|r Drachen-Grafik nicht gefunden (" .. kind .. "). Bitte melden.")
+        print("|cffd8a64aForeverUnitFrames:|r Drachen-Grafik nicht gefunden (" .. kind .. "). Bitte melden.")
     end
     return found or nil
 end
@@ -851,7 +851,7 @@ BuildVisuals = function(f, unit)
     end
     local lbl = Text(mo, 12, "CENTER")
     lbl:SetPoint("CENTER")
-    lbl:SetText(f.isTarget and "ForeverFrames: Ziel" or "ForeverFrames: Spieler")
+    lbl:SetText(f.isTarget and "ForeverUnitFrames: Ziel" or "ForeverUnitFrames: Spieler")
     mo:Hide()
     f.moveOverlay = mo
 end
@@ -926,8 +926,8 @@ function ns:SnapAndSave(frame)
 end
 
 function ns:CreateFrames()
-    ns.frames.player = CreateUnitFrame("player", "player", "ForeverFramesPlayer")
-    ns.frames.target = CreateUnitFrame("target", "target", "ForeverFramesTarget")
+    ns.frames.player = CreateUnitFrame("player", "player", "ForeverUnitFramesPlayer")
+    ns.frames.target = CreateUnitFrame("target", "target", "ForeverUnitFramesTarget")
 end
 
 -- Vorschau-Frame für die Einstellungen
