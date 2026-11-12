@@ -1,0 +1,67 @@
+name: Release
+
+# Ein Tag wie v0.2.0 pushen -> ZIP bauen und GitHub-Release erstellen.
+# Manuell starten (workflow_dispatch) -> nur ZIP bauen, als Workflow-Artefakt zum Testen.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  ADDON: ForeverUnitFrames
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version aus der .toc lesen
+        id: version
+        run: |
+          VERSION=$(grep -m1 '^## Version:' "$ADDON.toc" | sed 's/^## Version:[[:space:]]*//' | tr -d '\r')
+          if [ -z "$VERSION" ]; then
+            echo "::error::Keine '## Version:' in $ADDON.toc gefunden"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Version aus der .toc: $VERSION"
+
+      - name: Tag mit .toc-Version vergleichen
+        if: github.ref_type == 'tag'
+        run: |
+          if [ "${GITHUB_REF_NAME#v}" != "${{ steps.version.outputs.version }}" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME passt nicht zur .toc-Version ${{ steps.version.outputs.version }}"
+            exit 1
+          fi
+
+      - name: ZIP bauen
+        id: zip
+        run: |
+          ZIP="$ADDON-${{ steps.version.outputs.version }}.zip"
+          mkdir -p "build/$ADDON"
+          cp "$ADDON.toc" *.lua "build/$ADDON/"
+          mkdir -p "build/$ADDON/Media"
+          cp Media/*.tga "build/$ADDON/Media/"
+          (cd build && zip -r -9 "../$ZIP" "$ADDON")
+          unzip -l "$ZIP"
+          echo "file=$ZIP" >> "$GITHUB_OUTPUT"
+
+      - name: ZIP als Artefakt ablegen
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.zip.outputs.file }}
+          path: ${{ steps.zip.outputs.file }}
+
+      - name: Release erstellen
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "${{ steps.zip.outputs.file }}" \
+            --title "$ADDON ${{ steps.version.outputs.version }}" \
+            --generate-notes
