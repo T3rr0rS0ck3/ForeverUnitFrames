@@ -1,0 +1,11 @@
+## Interface: 16001
+## Title: ForeverFrames
+## Notes: Flache Spieler- und Ziel-Frames mit Debuffs, Profilen und eigener Skalierung pro Frame.
+## Author: Robin
+## Version: 0.1.0
+## SavedVariables: ForeverFramesDB
+
+Core.lua
+Auras.lua
+Frames.lua
+Options.lua
