@@ -2,7 +2,7 @@
 ## Title: ForeverUnitFrames
 ## Notes: Flache Spieler- und Ziel-Frames mit Debuffs, Profilen und eigener Skalierung pro Frame.
 ## Author: Robin
-## Version: 0.2.0
+## Version: @project-version@
 ## SavedVariables: ForeverUnitFramesDB
 
 Core.lua

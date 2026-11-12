@@ -1,8 +1,10 @@
 name: Release
 
-# Ein Tag wie v0.2.0 pushen -> ZIP bauen und GitHub-Release erstellen.
-# Die Version in der ZIP-.toc wird automatisch aus dem Tag gesetzt.
-# Manuell starten (workflow_dispatch) -> nur ZIP bauen, als Workflow-Artefakt zum Testen.
+# Ein Tag wie v0.3.0 pushen -> Paket bauen, GitHub-Release erstellen und zu CurseForge hochladen.
+#   - Tag enthält "alpha" -> Alpha, enthält "beta" -> Beta, sonst Release
+#   - Die Version kommt aus dem Tag (@project-version@ in der .toc)
+#   - Upload zu CurseForge braucht "## X-Curse-Project-ID" in der .toc und das Secret CF_API_KEY
+# Manuell starten (workflow_dispatch) -> nur Paket bauen, nichts hochladen (ZIP als Artefakt zum Testen).
 on:
   push:
     tags:
@@ -12,54 +14,29 @@ on:
 permissions:
   contents: write
 
-env:
-  ADDON: ForeverUnitFrames
-
 jobs:
   release:
     runs-on: ubuntu-latest
+    env:
+      CF_API_KEY: ${{ secrets.CF_API_KEY }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # der Packager braucht die Historie für Changelog und Version
 
-      # Die Version kommt aus dem Tag (v0.3.0 -> 0.3.0), bei manuellem Start "dev-<commit>"
-      - name: Version bestimmen
-        id: version
-        run: |
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          else
-            VERSION="dev-${GITHUB_SHA::7}"
-          fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Version: $VERSION"
+      - name: Paket bauen und veröffentlichen
+        if: github.ref_type == 'tag'
+        uses: BigWigsMods/packager@v2
 
-      - name: ZIP bauen
-        id: zip
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          ZIP="$ADDON-$VERSION.zip"
-          mkdir -p "build/$ADDON"
-          cp "$ADDON.toc" *.lua "build/$ADDON/"
-          # Version in die .toc der ZIP schreiben (die .toc im Repo bleibt unverändert)
-          sed -i "s/^## Version:.*/## Version: $VERSION/" "build/$ADDON/$ADDON.toc"
-          grep '^## Version:' "build/$ADDON/$ADDON.toc"
-          mkdir -p "build/$ADDON/Media"
-          cp Media/*.tga "build/$ADDON/Media/"
-          (cd build && zip -r -9 "../$ZIP" "$ADDON")
-          unzip -l "$ZIP"
-          echo "file=$ZIP" >> "$GITHUB_OUTPUT"
+      - name: Paket nur bauen (Test)
+        if: github.ref_type != 'tag'
+        uses: BigWigsMods/packager@v2
+        with:
+          args: -d   # -d = nichts hochladen
 
       - name: ZIP als Artefakt ablegen
         uses: actions/upload-artifact@v6
         with:
-          name: ${{ steps.zip.outputs.file }}
-          path: ${{ steps.zip.outputs.file }}
-
-      - name: Release erstellen
-        if: github.ref_type == 'tag'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "$GITHUB_REF_NAME" "${{ steps.zip.outputs.file }}" \
-            --title "$ADDON ${{ steps.version.outputs.version }}" \
-            --generate-notes
+          name: ForeverUnitFrames
+          path: .release/*.zip

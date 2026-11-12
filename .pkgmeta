@@ -1,0 +1,8 @@
+package-as: ForeverUnitFrames
+
+# Nicht ins Addon-Paket (Dateien mit Punkt wie .git, .github und .pkgmeta werden automatisch ignoriert)
+ignore:
+  - Images
+  - README.md
+  - CURSEFORGE.md
+  - CURSEFORGE_EN.md
