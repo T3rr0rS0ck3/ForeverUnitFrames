@@ -40,3 +40,4 @@ jobs:
         with:
           name: ForeverUnitFrames
           path: .release/*.zip
+          include-hidden-files: true
