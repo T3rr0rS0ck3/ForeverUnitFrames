@@ -321,6 +321,46 @@ function UF:UpdateMarker()
     end
 end
 
+-- PvP-Symbol: Wappen der Fraktion bzw. FFA-Symbol
+local PVP_ICON = {
+    Alliance = { atlas = "UI-HUD-UnitFrame-Player-PVP-AllianceIcon", file = "Interface\\TargetingFrame\\UI-PVP-Alliance" },
+    Horde    = { atlas = "UI-HUD-UnitFrame-Player-PVP-HordeIcon",    file = "Interface\\TargetingFrame\\UI-PVP-Horde" },
+    FFA      = { atlas = "UI-HUD-UnitFrame-Player-PVP-FFAIcon",      file = "Interface\\TargetingFrame\\UI-PVP-FFA" },
+}
+local PVP_H = 28
+
+function UF:SetPvPIcon(kind)
+    local t, icon = self.pvp, kind and PVP_ICON[kind]
+    if not icon or not ns.profile[self.key].showPvP then
+        t:Hide()
+        return
+    end
+    local info = C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(icon.atlas)
+    if info and info.height and info.height > 0 then
+        t:SetAtlas(icon.atlas, false)
+        t:SetSize(PVP_H * info.width / info.height, PVP_H)
+    else
+        -- ältere Clients: alte Grafik, das Wappen sitzt oben links in der 64er-Textur
+        t:SetTexture(icon.file)
+        t:SetTexCoord(0, 0.62, 0, 0.62)
+        t:SetSize(PVP_H, PVP_H)
+    end
+    t:Show()
+end
+
+function UF:UpdatePvP()
+    local unit, kind = self.unit, nil
+    if UnitExists(unit) then
+        if UnitIsPVPFreeForAll(unit) then
+            kind = "FFA"
+        elseif UnitIsPVP(unit) then
+            local faction = UnitFactionGroup(unit)
+            if faction == "Alliance" or faction == "Horde" then kind = faction end
+        end
+    end
+    self:SetPvPIcon(kind)
+end
+
 function UF:UpdateAuras()
     local s = ns.profile[self.key]
     self.auras:Update({ enabled = s.showDebuffs, onlyOwn = s.onlyOwnDebuffs, max = 16 })
@@ -428,6 +468,13 @@ function UF:PreviewUpdate()
         self.marker:Hide()
     end
 
+    -- PvP: eigene Fraktion, beim Ziel die andere
+    local faction = UnitFactionGroup("player")
+    if self.isTarget then
+        faction = (faction == "Horde") and "Alliance" or (faction == "Alliance") and "Horde" or "FFA"
+    end
+    self:SetPvPIcon(PVP_ICON[faction] and faction or "FFA")
+
     -- Auren mit Beispieldaten
     self.auras:Update({ enabled = s.showDebuffs, onlyOwn = s.onlyOwnDebuffs, max = 16, sample = d.debuffs })
     self.buffs:Update({
@@ -524,6 +571,7 @@ function UF:UpdateAll()
     self:Run("UpdateMeta")
     self:Run("UpdatePortrait")
     self:Run("UpdateMarker")
+    self:Run("UpdatePvP")
     self:Run("UpdateAuras")
     self:Run("UpdateOrnament")
 end
@@ -641,6 +689,15 @@ function UF:ApplySettings()
         self.portraitFrame:SetPoint("RIGHT", self.box, "LEFT", P_OVER - offX, offY)
     end
 
+    -- PvP-Symbol: obere Außenecke des Portraits, ohne Portrait an der Außenkante des Kastens
+    self.pvp:ClearAllPoints()
+    local side = self.isTarget and "TOPRIGHT" or "TOPLEFT"
+    if s.portrait then
+        self.pvp:SetPoint("CENTER", self.portraitFrame, side, self.isTarget and -6 or 6, -6)
+    else
+        self.pvp:SetPoint("CENTER", self.box, side, self.isTarget and 4 or -4, 0)
+    end
+
     -- Sichtbarkeit / Verschieben
     local locked = not ns:IsUnlocked()
     self.moveOverlay:SetShown(not locked and not self.preview)
@@ -671,10 +728,12 @@ local function OnEvent(self, event, unit)
         self:Run("UpdateName")
     elseif event == "RAID_TARGET_UPDATE" then
         self:Run("UpdateMarker")
+    elseif event == "PLAYER_FLAGS_CHANGED" then
+        self:Run("UpdatePvP")
     elseif event == "UNIT_LEVEL" or event == "UNIT_FACTION" or event == "UNIT_CLASSIFICATION_CHANGED"
         or event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_REGEN_DISABLED" then
         self:Run("UpdateMeta")
-        if event == "UNIT_FACTION" then self:Run("UpdateHealth") end
+        if event == "UNIT_FACTION" then self:Run("UpdateHealth"); self:Run("UpdatePvP") end
         if event == "UNIT_CLASSIFICATION_CHANGED" then self:Run("UpdateOrnament") end
         if event == "PLAYER_REGEN_ENABLED" then self:Run("UpdateAuras") end   -- nach dem Kampf wieder lesbar
     else -- PLAYER_TARGET_CHANGED, PLAYER_ENTERING_WORLD
@@ -732,15 +791,15 @@ local function CreateUnitFrame(key, unit, name, previewParent)
     -- Events
     for _, ev in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT",
         "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER", "UNIT_AURA", "UNIT_PORTRAIT_UPDATE", "UNIT_MODEL_CHANGED",
-        "UNIT_NAME_UPDATE", "UNIT_LEVEL", "UNIT_FACTION", "UNIT_CLASSIFICATION_CHANGED" }) do
+        "UNIT_NAME_UPDATE", "UNIT_LEVEL", "UNIT_FACTION", "UNIT_CLASSIFICATION_CHANGED", "PLAYER_FLAGS_CHANGED" }) do
         SafeRegisterUnit(f, ev, unit)
     end
     f:RegisterEvent("RAID_TARGET_UPDATE")
     f:RegisterEvent("PLAYER_ENTERING_WORLD")
+    f:RegisterEvent("PLAYER_REGEN_ENABLED")   -- nach dem Kampf Auren neu lesen
     if f.isTarget then
         f:RegisterEvent("PLAYER_TARGET_CHANGED")
     else
-        f:RegisterEvent("PLAYER_REGEN_ENABLED")
         f:RegisterEvent("PLAYER_REGEN_DISABLED")
     end
     f:SetScript("OnEvent", OnEvent)
@@ -830,6 +889,11 @@ BuildVisuals = function(f, unit)
     f.marker:SetPoint("CENTER", box, "TOP", 0, 2)
     f.marker:SetTexture("Interface\\TargetingFrame\\UI-RaidTargetingIcons")
     f.marker:Hide()
+
+    -- PvP-Symbol (Position folgt in ApplySettings)
+    f.pvp = mk:CreateTexture(nil, "OVERLAY", nil, 1)
+    f.pvp:SetSize(PVP_H, PVP_H)
+    f.pvp:Hide()
 
     -- Debuffs
     f.auras = ns:CreateAuraContainer(f, unit, W, f.isTarget and "target" or "player")

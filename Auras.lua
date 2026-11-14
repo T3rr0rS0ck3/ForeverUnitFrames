@@ -224,10 +224,15 @@ function Container:Update(opts)
         canSteal = isBuff and opts.highlightSteal and UnitExists(unit) and UnitCanAttack("player", unit)
     end
 
+    -- Zu welcher Einheit gehört die Anzeige? Wichtig, damit nach einem Zielwechsel
+    -- nie die Auren des vorherigen Ziels stehen bleiben.
+    local guid = (not opts.sample) and UnitExists(unit) and UnitGUID(unit) or nil
+    if guid and IsSecret(guid) then guid = nil end
+
     if opts.enabled and (opts.sample or UnitExists(unit)) then
         local now = GetTime()
-        local i = 1
-        while true do
+        local i, blockedCount = 1, 0
+        while i <= 64 do
             local aura
             if opts.sample then
                 -- Beispieldaten für die Vorschau in den Einstellungen
@@ -245,27 +250,35 @@ function Container:Update(opts)
                 local blocked
                 aura, blocked = ReadAura(unit, i, self.filter)
                 if blocked then
-                    -- Daten gerade gesperrt: letzte Anzeige stehen lassen,
-                    -- aktualisiert wird beim nächsten erlaubten UNIT_AURA bzw. nach dem Kampf
-                    return
+                    -- diese eine Aura ist gerade gesperrt: überspringen, die übrigen trotzdem zeigen
+                    blockedCount = blockedCount + 1
+                    aura = false
                 end
             end
-            if not aura or not aura.name then break end
-            aura.index = i
-            aura.own = IsOwn(aura)
-            if isBuff then
-                aura.steal = canSteal and (aura.isStealable or (playerPurges and aura.dispelName == "Magic")) and true or false
-                local keep = true
-                local f = opts.filter
-                if f == "own" then keep = aura.own
-                elseif f == "short" then keep = aura.duration and aura.duration > 0 and aura.duration <= 60
-                elseif f == "steal" then keep = aura.steal end
-                if keep then list[#list + 1] = aura end
-            else
-                aura.dispellable = (self.mode == "player" and playerDispels[aura.dispelName or ""]) and true or false
-                if not (opts.onlyOwn and not aura.own) then list[#list + 1] = aura end
+            if aura == nil or (aura and not aura.name) then break end
+            if aura then
+                aura.index = i
+                aura.own = IsOwn(aura)
+                if isBuff then
+                    aura.steal = canSteal and (aura.isStealable or (playerPurges and aura.dispelName == "Magic")) and true or false
+                    local keep = true
+                    local f = opts.filter
+                    if f == "own" then keep = aura.own
+                    elseif f == "short" then keep = aura.duration and aura.duration > 0 and aura.duration <= 60
+                    elseif f == "steal" then keep = aura.steal end
+                    if keep then list[#list + 1] = aura end
+                else
+                    aura.dispellable = (self.mode == "player" and playerDispels[aura.dispelName or ""]) and true or false
+                    if not (opts.onlyOwn and not aura.own) then list[#list + 1] = aura end
+                end
             end
             i = i + 1
+        end
+
+        -- Alles gesperrt und noch dieselbe Einheit: letzte Anzeige stehen lassen,
+        -- aktualisiert wird beim nächsten lesbaren UNIT_AURA bzw. nach dem Kampf
+        if blockedCount > 0 and #list == 0 and guid and guid == self.shownGUID then
+            return
         end
 
         if self.mode == "player" then
@@ -351,6 +364,7 @@ function Container:Update(opts)
             SetGlow(b, false)
         end
     end
+    self.shownGUID = guid
     self:SetHeight(shown > 0 and (y + rowH + ROW_GAP) or 1)
     self:UpdateTimers()
 end

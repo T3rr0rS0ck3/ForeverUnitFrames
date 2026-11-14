@@ -360,6 +360,8 @@ local function BuildUnit(content, key)
         Checkbox(p, "Nur eigene Debuffs zeigen", { key, "onlyOwnDebuffs" }, L - 2, -104)
         y = -132
     end
+    Checkbox(p, "PvP-Symbol anzeigen", { key, "showPvP" }, L - 2, y)
+    y = y - 28
 
     Section(p, "Balken", L, y - 10)
     y = y - 36

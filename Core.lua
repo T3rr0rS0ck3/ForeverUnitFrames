@@ -18,6 +18,7 @@ local function UnitDefaults(x, ornament)
         portrait = false, portraitShape = "round",
         portraitSize = 70, portraitX = 0, portraitY = 0,
         showDebuffs = true, onlyOwnDebuffs = false,
+        showPvP = true,                              -- PvP-Symbol bei PvP-Markierung
         showBuffs = true, buffPos = "top",          -- top | bottom | side
         buffFilter = "all",                          -- all | own | short | steal
         buffSize = 22, buffMax = 12, buffSteal = true,
