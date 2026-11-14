@@ -676,6 +676,7 @@ local function OnEvent(self, event, unit)
         self:Run("UpdateMeta")
         if event == "UNIT_FACTION" then self:Run("UpdateHealth") end
         if event == "UNIT_CLASSIFICATION_CHANGED" then self:Run("UpdateOrnament") end
+        if event == "PLAYER_REGEN_ENABLED" then self:Run("UpdateAuras") end   -- nach dem Kampf wieder lesbar
     else -- PLAYER_TARGET_CHANGED, PLAYER_ENTERING_WORLD
         self:UpdateAll()
     end

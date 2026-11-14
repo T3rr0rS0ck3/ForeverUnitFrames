@@ -60,6 +60,27 @@ else
     end
 end
 
+-- Neuere Clients sperren Aura-Daten in bestimmten Situationen (z. B. im Kampf)
+-- für Addons ("secret values"). Dann liefern wir "gesperrt" statt eines Fehlers.
+local IsSecret = issecretvalue or function() return false end
+local ShouldIndexBeSecret = C_Secrets and C_Secrets.ShouldUnitAuraIndexBeSecret
+
+local function ReadAura(unit, i, filter)
+    if ShouldIndexBeSecret then
+        local ok, secret = pcall(ShouldIndexBeSecret, unit, i, filter)
+        if ok and secret and not IsSecret(secret) then return nil, true end
+    end
+    local ok, aura = pcall(GetAuraByIndex, unit, i, filter)
+    if not ok then return nil, true end
+    if aura and (IsSecret(aura.name) or IsSecret(aura.icon) or IsSecret(aura.duration)
+        or IsSecret(aura.expirationTime) or IsSecret(aura.applications)
+        or IsSecret(aura.dispelName) or IsSecret(aura.isStealable)
+        or IsSecret(aura.isFromPlayerOrPlayerPet) or IsSecret(aura.sourceUnit)) then
+        return nil, true
+    end
+    return aura
+end
+
 local function IsOwn(aura)
     if aura.isFromPlayerOrPlayerPet ~= nil then return aura.isFromPlayerOrPlayerPet end
     local s = aura.sourceUnit
@@ -221,7 +242,13 @@ function Container:Update(opts)
                     }
                 end
             else
-                aura = GetAuraByIndex(unit, i, self.filter)
+                local blocked
+                aura, blocked = ReadAura(unit, i, self.filter)
+                if blocked then
+                    -- Daten gerade gesperrt: letzte Anzeige stehen lassen,
+                    -- aktualisiert wird beim nächsten erlaubten UNIT_AURA bzw. nach dem Kampf
+                    return
+                end
             end
             if not aura or not aura.name then break end
             aura.index = i
