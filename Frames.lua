@@ -143,6 +143,12 @@ end
 -- aber Rechnen und Vergleichen damit wirft einen Fehler.
 local IsSecret = issecretvalue or function() return false end
 
+-- Gibt nil zurück, wenn der Wert geheim ist (sonst den Wert selbst).
+local function Clean(v)
+    if IsSecret(v) then return nil end
+    return v
+end
+
 local function SafeCall(fn, ...)
     if not fn then return nil end
     local ok, r = pcall(fn, ...)
@@ -153,6 +159,7 @@ local function UnitColor(unit, pct, p)
     if UnitIsPlayer(unit) then
         if p.healthColor == "class" then
             local _, class = UnitClass(unit)
+            class = Clean(class)
             local c = class and RAID_CLASS_COLORS[class]
             if c then return c.r, c.g, c.b end
         elseif p.healthColor == "custom" then
@@ -165,7 +172,7 @@ local function UnitColor(unit, pct, p)
         return 0.85, pct * 2 * 0.75, 0.2
     end
     if UnitIsTapDenied and UnitIsTapDenied(unit) then return unpack(REACTION.tapped) end
-    local r = UnitReaction(unit, "player") or 4
+    local r = Clean(UnitReaction(unit, "player")) or 4
     if r <= 3 then return unpack(REACTION.hostile) end
     if r == 4 then return unpack(REACTION.neutral) end
     return unpack(REACTION.friendly)
@@ -186,6 +193,22 @@ end
 ---------------------------------------------------------------------------
 local UF = {}
 
+-- Heilung, die gerade auf die Einheit gewirkt wird (von allen Heilern).
+-- Die Werte dürfen geheim sein: der Balken zeigt sie trotzdem an.
+function UF:UpdateHealPrediction(max)
+    local unit = self.unit
+    if not UnitExists(unit) or not UnitGetIncomingHeals then
+        self.heal:SetValue(0)
+        return
+    end
+    max = max or UnitHealthMax(unit)
+    local incoming = SafeCall(UnitGetIncomingHeals, unit)
+    -- geheime Werte nicht auf nil prüfen (das wäre ein Vergleich), sondern direkt nutzen
+    if not IsSecret(incoming) and not incoming then incoming = 0 end
+    SafeCall(self.heal.SetMinMaxValues, self.heal, 0, max)
+    SafeCall(self.heal.SetValue, self.heal, incoming)
+end
+
 function UF:UpdateHealth()
     local unit = self.unit
     if not UnitExists(unit) then
@@ -193,12 +216,14 @@ function UF:UpdateHealth()
         self.hp:SetValue(1)
         self.hp:SetStatusBarColor(0.35, 0.37, 0.42)
         self.hpText:SetText("")
+        self.heal:SetValue(0)
         return
     end
 
     local cur, max = UnitHealth(unit), UnitHealthMax(unit)
     self.hp:SetMinMaxValues(0, max)
     self.hp:SetValue(cur)
+    self:UpdateHealPrediction(max)
 
     local secret = IsSecret(cur) or IsSecret(max)
     local pct
@@ -269,19 +294,30 @@ function UF:UpdateMeta()
         self.metaLeft:SetText(""); self.metaRight:SetText(""); self.levelText:SetText("")
         return
     end
-    local level = UnitLevel(unit)
-    local lr, lg, lb = LevelColor(level)
-    local lvlStr = level < 0 and "??" or tostring(level)
+    -- In Instanzen können Level, Klasse, Kreaturtyp usw. "geheim" sein:
+    -- solche Werte lassen wir weg statt mit ihnen zu rechnen/zu verketten.
+    local level = Clean(UnitLevel(unit))
+    local lr, lg, lb
+    local lvlStr
+    if level then
+        lr, lg, lb = LevelColor(level)
+        lvlStr = level < 0 and "??" or tostring(level)
+    else
+        lr, lg, lb = 1, 0.82, 0.4
+        lvlStr = "??"
+    end
     local lvlHex = format("|cff%02x%02x%02x", lr * 255, lg * 255, lb * 255)
 
     local parts = {}
     if not self.portraitOn then parts[#parts + 1] = lvlHex .. lvlStr .. "|r" end
-    local cls = CLASSIFICATION[UnitClassification(unit)]
+    local clsKey = Clean(UnitClassification(unit))
+    local cls = clsKey and CLASSIFICATION[clsKey]
     if cls then parts[#parts + 1] = cls end
-    if UnitIsPlayer(unit) then
-        parts[#parts + 1] = (UnitClass(unit))
+    if Clean(UnitIsPlayer(unit)) then
+        local className = Clean((UnitClass(unit)))
+        if className then parts[#parts + 1] = className end
     else
-        local ctype = UnitCreatureType(unit)
+        local ctype = Clean(UnitCreatureType(unit))
         if ctype then parts[#parts + 1] = ctype end
     end
     self.metaLeft:SetText(table.concat(parts, " · "))
@@ -290,18 +326,18 @@ function UF:UpdateMeta()
     self.levelText:SetTextColor(lr, lg, lb)
 
     if self.isTarget then
-        if UnitIsDead(unit) then
+        if Clean(UnitIsDead(unit)) then
             self.metaRight:SetText("|cff999999tot|r")
-        elseif UnitIsPlayer(unit) and UnitIsFriend("player", unit) then
+        elseif Clean(UnitIsPlayer(unit)) and Clean(UnitIsFriend("player", unit)) then
             self.metaRight:SetText("")
         else
-            local r = UnitReaction(unit, "player") or 4
+            local r = Clean(UnitReaction(unit, "player")) or 4
             if r <= 3 then self.metaRight:SetText("|cffc9302cfeindlich|r")
             elseif r == 4 then self.metaRight:SetText("|cffe3c23aneutral|r")
             else self.metaRight:SetText("|cff40b35afreundlich|r") end
         end
     else
-        self.metaRight:SetText(UnitAffectingCombat("player") and "|cffe0675aKampf|r" or "")
+        self.metaRight:SetText(Clean(UnitAffectingCombat("player")) and "|cffe0675aKampf|r" or "")
     end
 end
 
@@ -417,6 +453,8 @@ function UF:PreviewUpdate()
     -- Leben
     self.hp:SetMinMaxValues(0, 1)
     self.hp:SetValue(d.pct)
+    self.heal:SetMinMaxValues(0, 1)
+    self.heal:SetValue(self.isTarget and 0 or 0.15)   -- Beispiel: Heilung unterwegs
     if self.isTarget then
         self.hp:SetStatusBarColor(unpack(REACTION.hostile))
     else
@@ -630,6 +668,14 @@ function UF:ApplySettings()
         bar.shade:SetPoint("BOTTOMRIGHT", fill, "BOTTOMRIGHT")
         bar.shade:SetShown(s.barShade)
     end
+    self.heal:SetStatusBarTexture(tex)
+    self.heal:GetStatusBarTexture():SetHorizTile(false)
+    self.heal:SetShown(s.showHealPrediction ~= false)
+    -- Anker neu setzen, falls SetStatusBarTexture ein neues Füllobjekt erzeugt hat
+    local hpFill = self.hp:GetStatusBarTexture()
+    self.heal:ClearAllPoints()
+    self.heal:SetPoint("TOPLEFT", hpFill, "TOPRIGHT")
+    self.heal:SetPoint("BOTTOMLEFT", hpFill, "BOTTOMRIGHT")
 
     -- Balken laufen bis an den Rand, das Portrait liegt leicht darüber
     self.hp:ClearAllPoints()
@@ -718,6 +764,8 @@ end
 local function OnEvent(self, event, unit)
     if event == "UNIT_HEALTH" or event == "UNIT_MAXHEALTH" or event == "UNIT_HEALTH_FREQUENT" then
         self:Run("UpdateHealth")
+    elseif event == "UNIT_HEAL_PREDICTION" then
+        self:Run("UpdateHealPrediction")
     elseif event == "UNIT_POWER_UPDATE" or event == "UNIT_POWER_FREQUENT" or event == "UNIT_MAXPOWER" or event == "UNIT_DISPLAYPOWER" then
         self:Run("UpdatePower")
     elseif event == "UNIT_AURA" then
@@ -789,7 +837,7 @@ local function CreateUnitFrame(key, unit, name, previewParent)
     BuildVisuals(f, unit)
 
     -- Events
-    for _, ev in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT",
+    for _, ev in ipairs({ "UNIT_HEALTH", "UNIT_MAXHEALTH", "UNIT_HEAL_PREDICTION", "UNIT_POWER_UPDATE", "UNIT_POWER_FREQUENT",
         "UNIT_MAXPOWER", "UNIT_DISPLAYPOWER", "UNIT_AURA", "UNIT_PORTRAIT_UPDATE", "UNIT_MODEL_CHANGED",
         "UNIT_NAME_UPDATE", "UNIT_LEVEL", "UNIT_FACTION", "UNIT_CLASSIFICATION_CHANGED", "PLAYER_FLAGS_CHANGED" }) do
         SafeRegisterUnit(f, ev, unit)
@@ -821,6 +869,24 @@ BuildVisuals = function(f, unit)
 
     f.hp = Bar(box, HP_H)
     f.pw = Bar(box, PW_H)
+
+    -- Eingehende Heilung: eigener Balken, der direkt an der Kante der Lebensfüllung
+    -- beginnt und so breit ist wie der ganze Lebensbalken. Mit denselben Min/Max-Werten
+    -- entspricht seine Füllung genau der Heilmenge. So kommt man ohne Rechnen aus,
+    -- was mit geheimen Werten wichtig ist. Was über das Maximum hinausgeht, wird abgeschnitten.
+    f.hp:SetClipsChildren(true)
+    local heal = CreateFrame("StatusBar", nil, f.hp)
+    heal:SetFrameLevel(f.hp:GetFrameLevel() + 1)
+    heal:SetStatusBarTexture(FLAT)
+    heal:SetStatusBarColor(0.35, 0.95, 0.45, 0.45)
+    heal:SetMinMaxValues(0, 1)
+    heal:SetValue(0)
+    local hpFill = f.hp:GetStatusBarTexture()
+    heal:SetPoint("TOPLEFT", hpFill, "TOPRIGHT")
+    heal:SetPoint("BOTTOMLEFT", hpFill, "BOTTOMRIGHT")
+    heal:SetWidth(W)
+    f.hp:HookScript("OnSizeChanged", function(_, w) if w and w > 0 then heal:SetWidth(w) end end)
+    f.heal = heal
 
     local textLayer = CreateFrame("Frame", nil, f.hp)
     textLayer:SetAllPoints()

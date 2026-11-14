@@ -15,6 +15,7 @@ local function UnitDefaults(x, ornament)
         textMode = "both",                   -- both | pct | val | none
         barTexture = "Flach",
         barShade = true,                     -- dunkle untere Hälfte für etwas Tiefe
+        showHealPrediction = true,           -- eingehende Heilung als heller Balken hinter dem Leben
         portrait = false, portraitShape = "round",
         portraitSize = 70, portraitX = 0, portraitY = 0,
         showDebuffs = true, onlyOwnDebuffs = false,

@@ -408,9 +408,10 @@ local function BuildUnit(content, key)
         function() return ns.profile[key].barTexture end,
         function(v) ns.profile[key].barTexture = v; ns:ApplyAll() end)
     Checkbox(p, "Schattierung (dunkle untere Hälfte)", { key, "barShade" }, L - 2, y - 50)
+    Checkbox(p, "Eingehende Heilung anzeigen", { key, "showHealPrediction" }, L - 2, y - 76)
 
     -- Drachen-Ornament (linke Spalte unten)
-    y = y - 92
+    y = y - 118
     Section(p, "Ornament (Blizzard-Drache)", L, y)
     local ornOpts = {}
     if key == "target" then ornOpts[#ornOpts + 1] = { "auto", "Automatisch (nach Gegner)" } end
@@ -524,9 +525,9 @@ function ns:CreateOptions()
     main:Hide()
     main:SetScript("OnShow", Refresh)
     BuildMain(MakeScroll(main, 0, 820))
-    local player, playerC = NewPage("Spieler", 620 + PREVIEW_H)
+    local player, playerC = NewPage("Spieler", 650 + PREVIEW_H)
     BuildUnit(playerC, "player")
-    local target, targetC = NewPage("Ziel", 650 + PREVIEW_H)
+    local target, targetC = NewPage("Ziel", 680 + PREVIEW_H)
     BuildUnit(targetC, "target")
     local prof, profC = NewPage("Profile")
     BuildProfiles(profC)
