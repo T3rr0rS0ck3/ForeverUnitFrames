@@ -156,7 +156,7 @@ local function SafeCall(fn, ...)
 end
 
 local function UnitColor(unit, pct, p)
-    if UnitIsPlayer(unit) then
+    if Clean(UnitIsPlayer(unit)) then
         if p.healthColor == "class" then
             local _, class = UnitClass(unit)
             class = Clean(class)
@@ -171,7 +171,7 @@ local function UnitColor(unit, pct, p)
         if pct > 0.5 then return (1 - pct) * 2, 0.75, 0.2 end
         return 0.85, pct * 2 * 0.75, 0.2
     end
-    if UnitIsTapDenied and UnitIsTapDenied(unit) then return unpack(REACTION.tapped) end
+    if UnitIsTapDenied and Clean(UnitIsTapDenied(unit)) then return unpack(REACTION.tapped) end
     local r = Clean(UnitReaction(unit, "player")) or 4
     if r <= 3 then return unpack(REACTION.hostile) end
     if r == 4 then return unpack(REACTION.neutral) end
@@ -232,9 +232,9 @@ function UF:UpdateHealth()
     self.hp:SetStatusBarColor(UnitColor(unit, pct, s))
 
     local mode, txt = s.textMode, ""
-    if UnitIsDeadOrGhost(unit) then
-        txt = UnitIsGhost(unit) and "Geist" or "Tot"
-    elseif UnitIsPlayer(unit) and not UnitIsConnected(unit) then
+    if Clean(UnitIsDeadOrGhost(unit)) then
+        txt = Clean(UnitIsGhost(unit)) and "Geist" or "Tot"
+    elseif Clean(UnitIsPlayer(unit)) and Clean(UnitIsConnected(unit)) == false then
         txt = "Offline"
     elseif mode ~= "none" then
         local valStr, maxStr, pctStr
@@ -275,7 +275,8 @@ function UF:UpdatePower()
     local ptype, token = UnitPowerType(unit)
     self.pw:SetMinMaxValues(0, UnitPowerMax(unit, ptype))
     self.pw:SetValue(UnitPower(unit, ptype))
-    local c = (token and PowerBarColor[token]) or PowerBarColor[ptype] or { r = 0.2, g = 0.4, b = 0.85 }
+    token, ptype = Clean(token), Clean(ptype)
+    local c = (token and PowerBarColor[token]) or (ptype and PowerBarColor[ptype]) or { r = 0.2, g = 0.4, b = 0.85 }
     self.pw:SetStatusBarColor(c.r, c.g, c.b)
 end
 
@@ -348,7 +349,7 @@ function UF:UpdatePortrait()
 end
 
 function UF:UpdateMarker()
-    local idx = UnitExists(self.unit) and GetRaidTargetIndex(self.unit)
+    local idx = UnitExists(self.unit) and Clean(GetRaidTargetIndex(self.unit))
     if idx then
         SetRaidTargetIconTexture(self.marker, idx)
         self.marker:Show()
@@ -387,10 +388,11 @@ end
 function UF:UpdatePvP()
     local unit, kind = self.unit, nil
     if UnitExists(unit) then
-        if UnitIsPVPFreeForAll(unit) then
+        -- in Instanzen können diese Abfragen geheim sein: dann kein Symbol
+        if Clean(UnitIsPVPFreeForAll(unit)) then
             kind = "FFA"
-        elseif UnitIsPVP(unit) then
-            local faction = UnitFactionGroup(unit)
+        elseif Clean(UnitIsPVP(unit)) then
+            local faction = Clean(UnitFactionGroup(unit))
             if faction == "Alliance" or faction == "Horde" then kind = faction end
         end
     end
@@ -399,9 +401,22 @@ end
 
 function UF:UpdateAuras()
     local s = ns.profile[self.key]
-    self.auras:Update({ enabled = s.showDebuffs, onlyOwn = s.onlyOwnDebuffs, max = 16 })
+    local unitChanged = self.unitChanged
+    self.unitChanged = nil
+    -- Bevorzugt Blizzards AuraContainer (AuraContainers.lua): der darf Auren auch im Kampf
+    -- zeigen. Die eigenen Icons bleiben nur als Rückfall, falls der Client ihn nicht kennt.
+    local own = true
+    if not self.preview and ns.EnsureAuraContainers then
+        local fresh = not self.ac
+        if ns:EnsureAuraContainers(self) then
+            own = false
+            if fresh and self.auraW then ns:LayoutAuraContainers(self, self.auraW) end
+            ns:UpdateAuraContainers(self, unitChanged)
+        end
+    end
+    self.auras:Update({ enabled = own and s.showDebuffs, onlyOwn = s.onlyOwnDebuffs, max = 16 })
     self.buffs:Update({
-        enabled = s.showBuffs, filter = s.buffFilter, size = s.buffSize,
+        enabled = own and s.showBuffs, filter = s.buffFilter, size = s.buffSize,
         max = s.buffMax, highlightSteal = s.buffSteal,
     })
 end
@@ -561,7 +576,8 @@ function UF:UpdateOrnament()
         if self.preview then
             kind = "elite"
         else
-            kind = UnitExists(self.unit) and CLASS_TO_ORN[UnitClassification(self.unit) or ""] or nil
+            local cls = UnitExists(self.unit) and Clean(UnitClassification(self.unit))
+            kind = cls and CLASS_TO_ORN[cls] or nil
         end
     end
     local info = kind and kind ~= "none" and OrnamentInfo(kind)
@@ -700,6 +716,7 @@ function UF:ApplySettings()
 
     -- Debuffs unter dem Frame, auf der Portrait-Seite eingerückt
     local auraW = W - overlap
+    self.auraW = auraW
     self.auras:ClearAllPoints()
     self.auras:SetWidthPx(auraW)
     self.auras:SetPoint("TOPLEFT", self.box, "BOTTOMLEFT", leftIn, -22)
@@ -755,6 +772,10 @@ function UF:ApplySettings()
             self:Show()
         end
     end
+    -- Blizzards AuraContainer an dieselben Stellen wie die eigenen Icons legen
+    if not self.preview and ns.EnsureAuraContainers and ns:EnsureAuraContainers(self) then
+        ns:LayoutAuraContainers(self, self.auraW)
+    end
     self:UpdateAll()
 end
 
@@ -783,8 +804,16 @@ local function OnEvent(self, event, unit)
         self:Run("UpdateMeta")
         if event == "UNIT_FACTION" then self:Run("UpdateHealth"); self:Run("UpdatePvP") end
         if event == "UNIT_CLASSIFICATION_CHANGED" then self:Run("UpdateOrnament") end
-        if event == "PLAYER_REGEN_ENABLED" then self:Run("UpdateAuras") end   -- nach dem Kampf wieder lesbar
+        if event == "PLAYER_REGEN_ENABLED" then
+            -- nach dem Kampf wieder lesbar; kurz danach noch einmal, falls die Sperre nachläuft
+            self:Run("UpdateAuras")
+            C_Timer.After(1, function() self:Run("UpdateAuras") end)
+        end
     else -- PLAYER_TARGET_CHANGED, PLAYER_ENTERING_WORLD
+        -- andere Einheit: alte Auren nie stehen lassen
+        self.unitChanged = true
+        if self.auras then self.auras:Invalidate() end
+        if self.buffs then self.buffs:Invalidate() end
         self:UpdateAll()
     end
 end

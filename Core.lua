@@ -272,6 +272,9 @@ SlashCmdList.FOREVERFRAMES = function(msg)
         ns.profile.locked = (msg == "lock")
         ns:ApplyAll()
         print("|cffd8a64aForeverUnitFrames:|r Rahmen " .. (ns.profile.locked and "gesperrt." or "entsperrt. Mit der Maus verschieben, danach /ff lock."))
+    elseif msg == "auras" then
+        ns:DebugAuras()
+
     else
         ns:ToggleOptions()
     end

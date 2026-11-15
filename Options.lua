@@ -450,9 +450,6 @@ local function BuildUnit(content, key)
     }, R, -364)
     Slider(p, "Symbolgröße", { key, "buffSize" }, 16, 32, 1, R, -418, "%d px")
     Slider(p, "Maximale Anzahl", { key, "buffMax" }, 4, 24, 1, R, -464, "%d")
-    if key == "target" then
-        Checkbox(p, "Bannbare Buffs auf Gegnern hervorheben", { key, "buffSteal" }, R - 2, -508)
-    end
 end
 
 ---------------------------------------------------------------------------
@@ -527,7 +524,7 @@ function ns:CreateOptions()
     BuildMain(MakeScroll(main, 0, 820))
     local player, playerC = NewPage("Spieler", 650 + PREVIEW_H)
     BuildUnit(playerC, "player")
-    local target, targetC = NewPage("Ziel", 680 + PREVIEW_H)
+    local target, targetC = NewPage("Ziel", 650 + PREVIEW_H)
     BuildUnit(targetC, "target")
     local prof, profC = NewPage("Profile")
     BuildProfiles(profC)

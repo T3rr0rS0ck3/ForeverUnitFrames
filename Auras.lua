@@ -60,36 +60,139 @@ else
     end
 end
 
--- Neuere Clients sperren Aura-Daten in bestimmten Situationen (z. B. im Kampf)
--- für Addons ("secret values"). Dann liefern wir "gesperrt" statt eines Fehlers.
+-- Neuere Clients geben Aura-Daten teilweise als "geheim" zurück (z. B. in Instanzen,
+-- im Kampf oder bei fremden Auren). Geheime Werte dürfen nicht verglichen oder
+-- verrechnet werden, Blizzards Anzeige-Funktionen (SetTexture, SetText, Cooldown)
+-- nehmen sie aber an. Deshalb: Aura immer anzeigen, geheime Felder über diese
+-- Funktionen darstellen und nur lesbare Werte für Logik (Sortierung, Filter) nutzen.
 local IsSecret = issecretvalue or function() return false end
-local ShouldIndexBeSecret = C_Secrets and C_Secrets.ShouldUnitAuraIndexBeSecret
-
-local function ReadAura(unit, i, filter)
-    if ShouldIndexBeSecret then
-        local ok, secret = pcall(ShouldIndexBeSecret, unit, i, filter)
-        if ok and secret and not IsSecret(secret) then return nil, true end
-    end
-    local ok, aura = pcall(GetAuraByIndex, unit, i, filter)
-    if not ok then return nil, true end
-    if aura and (IsSecret(aura.name) or IsSecret(aura.icon) or IsSecret(aura.duration)
-        or IsSecret(aura.expirationTime) or IsSecret(aura.applications)
-        or IsSecret(aura.dispelName) or IsSecret(aura.isStealable)
-        or IsSecret(aura.isFromPlayerOrPlayerPet) or IsSecret(aura.sourceUnit)) then
-        return nil, true
-    end
-    return aura
+local function Clean(v)
+    if IsSecret(v) then return nil end
+    return v
 end
 
-local function IsOwn(aura)
-    if aura.isFromPlayerOrPlayerPet ~= nil then return aura.isFromPlayerOrPlayerPet end
-    local s = aura.sourceUnit
-    return s == "player" or s == "pet" or s == "vehicle"
+local AuraAPI = C_UnitAuras or {}
+local GetDurationObject = AuraAPI.GetAuraDuration
+local GetCountText      = AuraAPI.GetAuraApplicationDisplayCount
+local IsFilteredOut     = AuraAPI.IsAuraFilteredOutByInstanceID
+
+-- Passt die Aura zu einem Filter (z. B. "HARMFUL|PLAYER")? true/false, nil = unbekannt
+local function MatchesFilter(unit, id, hasId, filter)
+    if not (IsFilteredOut and hasId) then return nil end
+    local ok, out = pcall(IsFilteredOut, unit, id, filter)
+    if not ok or IsSecret(out) then return nil end
+    return not out
+end
+
+---------------------------------------------------------------------------
+-- Alle Auren einer Einheit holen
+-- Manche Clients verweigern Addons den Zugriff per Index komplett, sobald die
+-- Auren geheim sind ("Auras cannot be accessed when secret while tainted").
+-- Deshalb mehrere Wege nacheinander probieren; der zuletzt erfolgreiche zuerst.
+---------------------------------------------------------------------------
+local MAX_READ = 64
+local STRATEGIES = {}
+if AuraAPI.GetUnitAuras then
+    STRATEGIES[#STRATEGIES + 1] = { name = "GetUnitAuras", fn = function(unit, filter)
+        local t = AuraAPI.GetUnitAuras(unit, filter, MAX_READ)
+        return type(t) == "table" and t or {}
+    end }
+end
+if AuraAPI.GetUnitAuraInstanceIDs and AuraAPI.GetAuraDataByAuraInstanceID then
+    STRATEGIES[#STRATEGIES + 1] = { name = "GetUnitAuraInstanceIDs", fn = function(unit, filter)
+        local t, ids = {}, AuraAPI.GetUnitAuraInstanceIDs(unit, filter, MAX_READ)
+        if type(ids) == "table" then
+            for _, id in ipairs(ids) do
+                local a = AuraAPI.GetAuraDataByAuraInstanceID(unit, id)
+                if type(a) == "table" then t[#t + 1] = a end
+            end
+        end
+        return t
+    end }
+end
+if AuraAPI.GetAuraSlots and AuraAPI.GetAuraDataBySlot then
+    STRATEGIES[#STRATEGIES + 1] = { name = "GetAuraSlots", fn = function(unit, filter)
+        local t, token = {}, nil
+        for _ = 1, 10 do   -- Fortsetzungs-Token, sicherheitshalber begrenzt
+            local res = { AuraAPI.GetAuraSlots(unit, filter, MAX_READ, token) }
+            token = res[1]
+            for k = 2, #res do
+                local a = AuraAPI.GetAuraDataBySlot(unit, res[k])
+                if type(a) == "table" then t[#t + 1] = a end
+            end
+            if not token then break end
+        end
+        return t
+    end }
+end
+STRATEGIES[#STRATEGIES + 1] = { name = "Index", fn = function(unit, filter)
+    local t = {}
+    for i = 1, MAX_READ do
+        local a = GetAuraByIndex(unit, i, filter)
+        if type(a) ~= "table" then break end
+        t[#t + 1] = a
+    end
+    return t
+end }
+
+local preferred = 1
+local seenSpells = {}   -- spellId -> Name, für den Test in /ff auras
+
+-- Sperrt der Client gerade alle Auren dieser Einheit? (im Kampf: ja)
+local function AurasLocked(unit)
+    if not (C_Secrets and C_Secrets.ShouldAurasBeSecret) then return false end
+    local ok, locked = pcall(C_Secrets.ShouldAurasBeSecret, unit)
+    return ok and not IsSecret(locked) and locked == true
+end
+
+-- Liefert die rohen Aura-Tabellen oder nil, wenn der Client den Zugriff verweigert
+local function GetAuraList(unit, filter)
+    if AurasLocked(unit) then return nil end
+    local order = { preferred }
+    for k = 1, #STRATEGIES do if k ~= preferred then order[#order + 1] = k end end
+    for _, k in ipairs(order) do
+        local ok, list = pcall(STRATEGIES[k].fn, unit, filter)
+        if ok and list then
+            preferred = k
+            for _, raw in ipairs(list) do
+                local id = Clean(raw.spellId)
+                if id then seenSpells[id] = Clean(raw.name) or "?" end
+            end
+            return list
+        end
+    end
+    return nil
+end
+
+-- Bereitet eine rohe Aura auf (geheime Felder bleiben für die Anzeige erhalten)
+local function ReadAura(unit, raw, i, filter)
+    local a = { raw = raw, index = i }
+    -- Die ID darf geheim sein: Blizzards Funktionen nehmen sie trotzdem an
+    a.id = raw.auraInstanceID
+    a.hasId = IsSecret(a.id) or a.id ~= nil
+    a.icon = raw.icon                                   -- darf geheim sein (nur SetTexture)
+    a.duration = Clean(raw.duration)
+    a.expirationTime = Clean(raw.expirationTime)
+    a.timeSecret = IsSecret(raw.duration) or IsSecret(raw.expirationTime)
+    a.applications = Clean(raw.applications)
+    a.countSecret = IsSecret(raw.applications)
+    a.dispelName = Clean(raw.dispelName)
+    a.isStealable = Clean(raw.isStealable)
+
+    -- eigene Aura? Erst die direkten Felder, dann über den PLAYER-Filter fragen
+    local own = Clean(raw.isFromPlayerOrPlayerPet)
+    if own == nil then
+        local src = Clean(raw.sourceUnit)
+        if src ~= nil then own = (src == "player" or src == "pet" or src == "vehicle") end
+    end
+    if own == nil then own = MatchesFilter(unit, a.id, a.hasId, filter .. "|PLAYER") end
+    a.own = own and true or false
+    return a
 end
 
 local function Remaining(aura, now)
     if aura.expirationTime and aura.expirationTime > 0 then return aura.expirationTime - now end
-    return math.huge   -- ohne Ablauf (Aura, Gestalt …) ganz nach hinten
+    return math.huge   -- ohne Ablauf oder unbekannt (Aura, Gestalt …) ganz nach hinten
 end
 
 local function FormatTime(t)
@@ -110,14 +213,14 @@ local function OnEnter(self)
         return
     end
     local helpful = (self.filter == "HELPFUL")
-    if self.auraInstanceID and helpful and GameTooltip.SetUnitBuffByAuraInstanceID then
+    if self.hasId and helpful and GameTooltip.SetUnitBuffByAuraInstanceID then
         GameTooltip:SetUnitBuffByAuraInstanceID(self.unit, self.auraInstanceID)
-    elseif self.auraInstanceID and not helpful and GameTooltip.SetUnitDebuffByAuraInstanceID then
+    elseif self.hasId and not helpful and GameTooltip.SetUnitDebuffByAuraInstanceID then
         GameTooltip:SetUnitDebuffByAuraInstanceID(self.unit, self.auraInstanceID)
     elseif helpful then
-        GameTooltip:SetUnitBuff(self.unit, self.index)
+        pcall(GameTooltip.SetUnitBuff, GameTooltip, self.unit, self.index)
     else
-        GameTooltip:SetUnitDebuff(self.unit, self.index)
+        pcall(GameTooltip.SetUnitDebuff, GameTooltip, self.unit, self.index)
     end
     GameTooltip:Show()
 end
@@ -213,72 +316,79 @@ function Container:SetWidthPx(w)
 end
 
 -- opts: enabled, onlyOwn (Debuffs Ziel) | filter, size, max, highlightSteal (Buffs)
+-- Nach einem Zielwechsel: alte Anzeige gehört nicht mehr zur Einheit
+function Container:Invalidate()
+    self.valid = false
+end
+
 function Container:Update(opts)
     local list, unit = self.list, self.unit
+
+    -- Im Kampf verweigert der Client Addons jeden Zugriff auf Auren. Dann die letzte
+    -- Anzeige derselben Einheit stehen lassen (Timer laufen weiter, Abgelaufenes
+    -- verschwindet); nach dem Kampf wird sofort neu gelesen.
+    local raws
+    if not opts.sample and opts.enabled and UnitExists(unit) then
+        raws = GetAuraList(unit, self.filter)
+        if raws == nil and self.valid then
+            self.frozen = true
+            self:UpdateTimers()
+            return
+        end
+    end
+    self.frozen = false
+    self.valid = (raws ~= nil)
     wipe(list)
     local isBuff = (self.mode == "buff")
     local canSteal
     if opts.sample then
         canSteal = isBuff and opts.highlightSteal and opts.sampleHostile
     else
-        canSteal = isBuff and opts.highlightSteal and UnitExists(unit) and UnitCanAttack("player", unit)
+        local canAttack = UnitExists(unit) and UnitCanAttack("player", unit)
+        if IsSecret(canAttack) then canAttack = false end
+        canSteal = isBuff and opts.highlightSteal and canAttack
     end
-
-    -- Zu welcher Einheit gehört die Anzeige? Wichtig, damit nach einem Zielwechsel
-    -- nie die Auren des vorherigen Ziels stehen bleiben.
-    local guid = (not opts.sample) and UnitExists(unit) and UnitGUID(unit) or nil
-    if guid and IsSecret(guid) then guid = nil end
 
     if opts.enabled and (opts.sample or UnitExists(unit)) then
         local now = GetTime()
-        local i, blockedCount = 1, 0
-        while i <= 64 do
+        for i = 1, MAX_READ do
             local aura
             if opts.sample then
                 -- Beispieldaten für die Vorschau in den Einstellungen
                 local src = opts.sample[i]
-                if src then
-                    aura = {
-                        name = src.name, icon = src.icon, applications = src.applications,
-                        dispelName = src.dispelName, duration = src.duration,
-                        expirationTime = (src.duration and src.duration > 0) and (now + src.rem) or 0,
-                        isFromPlayerOrPlayerPet = src.own and true or false,
-                        isStealable = src.isStealable, isSample = true,
-                    }
-                end
+                if not src then break end
+                aura = {
+                    index = i, name = src.name, icon = src.icon, applications = src.applications,
+                    dispelName = src.dispelName, duration = src.duration,
+                    expirationTime = (src.duration and src.duration > 0) and (now + src.rem) or 0,
+                    own = src.own and true or false,
+                    isStealable = src.isStealable, isSample = true,
+                }
             else
-                local blocked
-                aura, blocked = ReadAura(unit, i, self.filter)
-                if blocked then
-                    -- diese eine Aura ist gerade gesperrt: überspringen, die übrigen trotzdem zeigen
-                    blockedCount = blockedCount + 1
-                    aura = false
-                end
+                local raw = raws and raws[i]
+                if not raw then break end
+                aura = ReadAura(unit, raw, i, self.filter)
             end
-            if aura == nil or (aura and not aura.name) then break end
-            if aura then
-                aura.index = i
-                aura.own = IsOwn(aura)
-                if isBuff then
-                    aura.steal = canSteal and (aura.isStealable or (playerPurges and aura.dispelName == "Magic")) and true or false
-                    local keep = true
-                    local f = opts.filter
-                    if f == "own" then keep = aura.own
-                    elseif f == "short" then keep = aura.duration and aura.duration > 0 and aura.duration <= 60
-                    elseif f == "steal" then keep = aura.steal end
-                    if keep then list[#list + 1] = aura end
-                else
-                    aura.dispellable = (self.mode == "player" and playerDispels[aura.dispelName or ""]) and true or false
-                    if not (opts.onlyOwn and not aura.own) then list[#list + 1] = aura end
-                end
-            end
-            i = i + 1
-        end
 
-        -- Alles gesperrt und noch dieselbe Einheit: letzte Anzeige stehen lassen,
-        -- aktualisiert wird beim nächsten lesbaren UNIT_AURA bzw. nach dem Kampf
-        if blockedCount > 0 and #list == 0 and guid and guid == self.shownGUID then
-            return
+            if isBuff then
+                aura.steal = canSteal and (aura.isStealable or (playerPurges and aura.dispelName == "Magic")) and true or false
+                local keep = true
+                local f = opts.filter
+                if f == "own" then keep = aura.own
+                elseif f == "short" then keep = aura.duration and aura.duration > 0 and aura.duration <= 60
+                elseif f == "steal" then keep = aura.steal end
+                if keep then list[#list + 1] = aura end
+            else
+                if self.mode == "player" then
+                    -- bannbar? Am zuverlässigsten über den RAID-Filter, sonst eigene Tabelle
+                    local d = (not aura.isSample) and MatchesFilter(unit, aura.id, aura.hasId, "HARMFUL|RAID")
+                    if d == nil then d = playerDispels[aura.dispelName or ""] end
+                    aura.dispellable = d and true or false
+                else
+                    aura.dispellable = false
+                end
+                if not (opts.onlyOwn and not aura.own) then list[#list + 1] = aura end
+            end
         end
 
         if self.mode == "player" then
@@ -327,7 +437,8 @@ function Container:Update(opts)
             x = x + size + GAP
             rowH = math.max(rowH, size)
 
-            b.unit, b.index, b.auraInstanceID, b.filter = unit, aura.index, aura.auraInstanceID, self.filter
+            b.unit, b.index, b.filter = unit, aura.index, self.filter
+            b.auraInstanceID, b.hasId = aura.id, aura.hasId
             b.sampleName = aura.isSample and aura.name or nil
             b.icon:SetTexture(aura.icon)
 
@@ -344,16 +455,36 @@ function Container:Update(opts)
             b.icon:SetDesaturated(dim)
             b.icon:SetAlpha(dim and 0.8 or 1)
 
-            local stacks = aura.applications or 0
-            b.count:SetText(stacks > 1 and stacks or "")
+            -- Stapel
+            local stacks = aura.applications
+            if stacks then
+                b.count:SetText(stacks > 1 and stacks or "")
+            elseif aura.countSecret and GetCountText and aura.hasId then
+                -- geheim: Blizzard liefert den fertigen Text (leer bei 0/1 Stapeln)
+                local ok, txt = pcall(GetCountText, unit, aura.id, 2)
+                b.count:SetText(ok and txt or "")
+            else
+                b.count:SetText("")
+            end
 
-            b.expiration = aura.expirationTime or 0
-            if aura.duration and aura.duration > 0 and b.expiration > 0 then
-                b.cd:SetCooldown(b.expiration - aura.duration, aura.duration)
+            -- Laufzeit
+            b.expiration = 0
+            b.time:SetText("")
+            if b.cd.SetHideCountdownNumbers then b.cd:SetHideCountdownNumbers(true) end
+            local exp, dur = aura.expirationTime or 0, aura.duration
+            if dur and dur > 0 and exp > 0 then
+                b.expiration = exp
+                b.cd:SetCooldown(exp - dur, dur)
+                b.cd:Show()
+            elseif aura.timeSecret and GetDurationObject and aura.hasId and b.cd.SetCooldownFromDurationObject
+                and pcall(function()
+                    b.cd:SetCooldownFromDurationObject(GetDurationObject(unit, aura.id))
+                end) then
+                -- geheime Laufzeit: Spirale und Zahl zeichnet Blizzard selbst
+                if b.cd.SetHideCountdownNumbers then b.cd:SetHideCountdownNumbers(false) end
                 b.cd:Show()
             else
                 b.cd:Hide()
-                b.time:SetText("")
             end
 
             SetGlow(b, aura.dispellable or aura.steal, r, g, bl)
@@ -364,7 +495,6 @@ function Container:Update(opts)
             SetGlow(b, false)
         end
     end
-    self.shownGUID = guid
     self:SetHeight(shown > 0 and (y + rowH + ROW_GAP) or 1)
     self:UpdateTimers()
 end
@@ -379,9 +509,204 @@ function Container:UpdateTimers()
                 if left < 3 then b.time:SetTextColor(1, 0.4, 0.35) else b.time:SetTextColor(1, 1, 1) end
             else
                 b.time:SetText("")
+                -- eingefroren (Kampf): abgelaufene Aura selbst ausblenden
+                if self.frozen then b:Hide(); SetGlow(b, false) end
             end
         end
     end
+end
+
+---------------------------------------------------------------------------
+-- /ff auras: zeigt im Chat, was der Client für Spieler und Ziel liefert
+---------------------------------------------------------------------------
+-- Merkt sich, was UNIT_AURA zuletzt mitgeliefert hat (nur für /ff auras)
+local lastPayload = {}
+local payloadFrame = CreateFrame("Frame")
+pcall(payloadFrame.RegisterUnitEvent, payloadFrame, "UNIT_AURA", "player", "target")
+payloadFrame:SetScript("OnEvent", function(_, _, unit, info)
+    -- Im Kampf sind die Tabellen selbst geheim: dann nicht einmal die Länge abfragen
+    local function Count(t)
+        if IsSecret(t) then return "geheim" end
+        if type(t) == "table" then return #t end
+    end
+    local r = { time = GetTime(), hasInfo = (not IsSecret(info)) and type(info) == "table" }
+    if r.hasInfo then
+        r.full = info.isFullUpdate
+        r.added = Count(info.addedAuras)
+        r.updated = Count(info.updatedAuraInstanceIDs)
+        r.removed = Count(info.removedAuraInstanceIDs)
+        if type(r.added) == "number" and r.added > 0 then r.sample = info.addedAuras[1] end
+    end
+    lastPayload[unit] = r
+end)
+
+function ns:DebugAuras()
+    local lines = {}
+    local function out(...)
+        local parts = {}
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            parts[#parts + 1] = IsSecret(v) and "<geheim>" or tostring(v)
+        end
+        local line = table.concat(parts, " ")
+        lines[#lines + 1] = line
+        print("|cffd8a64aFUF:|r " .. line)
+    end
+    local function has(v) return v and "ja" or "nein" end
+    local function val(v) if IsSecret(v) then return "<geheim>" end return tostring(v) end
+
+    out("Client:", (GetBuildInfo()), select(4, GetBuildInfo()))
+    out("API C_UnitAuras:", has(C_UnitAuras), "GetAuraDataByIndex", has(AuraAPI.GetAuraDataByIndex),
+        "GetUnitAuras", has(AuraAPI.GetUnitAuras), "GetUnitAuraInstanceIDs", has(AuraAPI.GetUnitAuraInstanceIDs),
+        "GetAuraDataByAuraInstanceID", has(AuraAPI.GetAuraDataByAuraInstanceID),
+        "GetAuraSlots", has(AuraAPI.GetAuraSlots), "GetAuraDataBySlot", has(AuraAPI.GetAuraDataBySlot),
+        "GetAuraDuration", has(GetDurationObject),
+        "GetAuraApplicationDisplayCount", has(GetCountText), "IsAuraFilteredOutByInstanceID", has(IsFilteredOut))
+    out("API alt: UnitAura", has(UnitAura), "UnitBuff", has(UnitBuff), "UnitDebuff", has(UnitDebuff),
+        "C_Secrets", has(C_Secrets), "SetCooldownFromDurationObject", has(CreateFrame("Cooldown").SetCooldownFromDurationObject))
+    local inInst, instType = IsInInstance()
+    out("Zustand: Kampf", val(InCombatLockdown()), "UnitAffectingCombat", val(UnitAffectingCombat("player")),
+        "Instanz", val(inInst), val(instType))
+    for _, tblName in ipairs({ "C_Secrets", "C_UnitAuras" }) do
+        local t = _G[tblName]
+        if type(t) == "table" then
+            local keys = {}
+            for k in pairs(t) do keys[#keys + 1] = tostring(k) end
+            table.sort(keys)
+            out(tblName .. ":", table.concat(keys, ", "))
+        end
+    end
+
+    local FIELDS = { "auraInstanceID", "name", "spellId", "icon", "duration", "expirationTime", "applications",
+        "dispelName", "isStealable", "isFromPlayerOrPlayerPet", "sourceUnit" }
+    for _, unit in ipairs({ "player", "target" }) do
+        if not UnitExists(unit) then
+            out(unit, "nicht vorhanden")
+        else
+            out("==", unit, val(UnitName(unit)), "angreifbar:", val(UnitCanAttack("player", unit)))
+            -- einzelne Auren per Index, auch nach einem Fehler weiter probieren
+            for _, filter in ipairs({ "HELPFUL", "HARMFUL", "HELPFUL|PLAYER", "HARMFUL|PLAYER", "HARMFUL|RAID", "HELPFUL|RAID" }) do
+                local okN, errN, firstErr = 0, 0, nil
+                local secInfo = {}
+                for i = 1, 20 do
+                    if C_Secrets and C_Secrets.ShouldUnitAuraIndexBeSecret and i <= 5 then
+                        local ok2, sec = pcall(C_Secrets.ShouldUnitAuraIndexBeSecret, unit, i, filter)
+                        secInfo[#secInfo + 1] = ok2 and val(sec) or "x"
+                    end
+                    local ok, a = pcall(AuraAPI.GetAuraDataByIndex, unit, i, filter)
+                    if ok then
+                        if type(a) ~= "table" then break end
+                        okN = okN + 1
+                    else
+                        errN = errN + 1
+                        firstErr = firstErr or i
+                    end
+                end
+                out(unit, filter, "Index einzeln: lesbar", okN, "verweigert", errN,
+                    "| IndexGeheim 1-5:", #secInfo > 0 and table.concat(secInfo, ",") or "-")
+            end
+            if C_Secrets then
+                for _, fn in ipairs({ "ShouldAurasBeSecret", "ShouldUnitAurasBeSecret", "ShouldUnitAuraInstanceBeSecret" }) do
+                    if C_Secrets[fn] then
+                        local ok2, r = pcall(C_Secrets[fn], unit)
+                        out("C_Secrets." .. fn .. "(" .. unit .. "):", ok2 and val(r) or ("fehler " .. tostring(r)))
+                    end
+                end
+            end
+            out(unit, "Auren gesperrt:", AurasLocked(unit))
+            -- Weg über Spell-IDs (außerhalb des Kampfes gesehene Auren)
+            local tested = 0
+            for id, name in pairs(seenSpells) do
+                if tested >= 8 then break end
+                tested = tested + 1
+                local info = {}
+                if C_Secrets and C_Secrets.GetSpellAuraSecrecy then
+                    local ok2, r = pcall(C_Secrets.GetSpellAuraSecrecy, id); info[#info + 1] = "Secrecy=" .. (ok2 and val(r) or "fehler")
+                end
+                if C_Secrets and C_Secrets.ShouldSpellAuraBeSecret then
+                    local ok2, r = pcall(C_Secrets.ShouldSpellAuraBeSecret, id); info[#info + 1] = "geheim=" .. (ok2 and val(r) or "fehler")
+                end
+                if AuraAPI.GetUnitAuraBySpellID then
+                    local ok2, r = pcall(AuraAPI.GetUnitAuraBySpellID, unit, id)
+                    info[#info + 1] = "BySpellID=" .. (ok2 and (type(r) == "table" and "LESBAR" or val(r)) or ("FEHLER " .. tostring(r):match("^[^\n]*")))
+                end
+                if unit == "player" and AuraAPI.GetPlayerAuraBySpellID then
+                    local ok2, r = pcall(AuraAPI.GetPlayerAuraBySpellID, id)
+                    info[#info + 1] = "Player=" .. (ok2 and (type(r) == "table" and "LESBAR" or val(r)) or ("FEHLER " .. tostring(r):match("^[^\n]*")))
+                end
+                out(unit, "Spell", id, name, table.concat(info, " "))
+            end
+            if tested == 0 then out(unit, "noch keine Spell-IDs gesehen (erst außerhalb des Kampfes /ff auras)") end
+
+            local pl = lastPayload[unit]
+            if pl then
+                out(unit, "letztes UNIT_AURA vor", format("%.0fs", GetTime() - pl.time), "Daten:", pl.hasInfo,
+                    "voll:", val(pl.full), "neu:", val(pl.added), "geändert:", val(pl.updated), "entfernt:", val(pl.removed))
+                if pl.sample then
+                    local f = {}
+                    for _, k in ipairs(FIELDS) do f[#f + 1] = k .. "=" .. val(pl.sample[k]) end
+                    out(unit, "Event-Aura:", table.concat(f, " "))
+                    if AuraAPI.GetAuraDataByAuraInstanceID then
+                        local ok2, a = pcall(AuraAPI.GetAuraDataByAuraInstanceID, unit, pl.sample.auraInstanceID)
+                        out(unit, "GetAuraDataByAuraInstanceID(Event-ID):", ok2 and (type(a) == "table" and "lesbar" or tostring(a)) or ("FEHLER " .. tostring(a)))
+                    end
+                end
+            else
+                out(unit, "noch kein UNIT_AURA empfangen")
+            end
+
+            for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
+                -- jeden Lese-Weg einzeln testen
+                local good
+                for _, st in ipairs(STRATEGIES) do
+                    local ok, list = pcall(st.fn, unit, filter)
+                    if ok then
+                        out(unit, filter, st.name .. ":", #list, "Auren")
+                        if not good and #list > 0 then good = list end
+                    else
+                        out(unit, filter, st.name .. ": FEHLER", list)
+                    end
+                end
+                for i, raw in ipairs(good or {}) do
+                    local f = {}
+                    for _, k in ipairs(FIELDS) do f[#f + 1] = k .. "=" .. val(raw[k]) end
+                    local a = ReadAura(unit, raw, i, filter)
+                    f[#f + 1] = "eigen=" .. tostring(a.own)
+                    out(unit, filter, "#" .. i, table.concat(f, " "))
+                end
+            end
+
+            -- Was zeigt unser Frame gerade an?
+            local fr = ns.frames and ns.frames[unit]
+            if fr then
+                out("Frame", unit, "sichtbar:", fr:IsVisible(), "alpha:", fr:GetEffectiveAlpha())
+                for _, key in ipairs({ "auras", "buffs" }) do
+                    local c = rawget(fr, key)
+                    if type(c) == "table" and c.icons then
+                        local shown = 0
+                        for _, b in ipairs(c.icons) do if b:IsShown() then shown = shown + 1 end end
+                        local pt, rel, rp, x, y = c:GetPoint(1)
+                        out(" ", key, "Liste:", #c.list, "Icons sichtbar:", shown, "Container sichtbar:", c:IsVisible(),
+                            "Höhe:", c:GetHeight(), "Anker:", pt, rel and (rel.GetName and rel:GetName() or "frame"), rp, x, y)
+                    else
+                        out(" ", key, "fehlt")
+                    end
+                end
+            else
+                out("Frame", unit, "nicht gefunden")
+            end
+        end
+    end
+
+    if ns.DebugAuraContainers then
+        local ok, err = pcall(ns.DebugAuraContainers, ns, out)
+        if not ok then out("AuraContainer-Debug Fehler:", err) end
+    end
+
+    -- auch in den SavedVariables ablegen (nach /reload in WTF lesbar)
+    ForeverUnitFramesDB = ForeverUnitFramesDB or {}
+    ForeverUnitFramesDB.auraDebug = { time = date("%Y-%m-%d %H:%M:%S"), lines = lines }
+    print("|cffd8a64aFUF:|r Gespeichert. Mit /reload wird es auf die Festplatte geschrieben.")
 end
 
 ---------------------------------------------------------------------------
