@@ -319,7 +319,7 @@ function ns:DebugAuraContainers(out)
         local fr = ns.frames and ns.frames[unit]
         local ac = fr and fr.ac
         if not ac then
-            out("AuraContainer", unit, "nicht angelegt")
+            out("AuraContainer", unit, "not created")
         else
             for kind, c in pairs(ac) do
                 local counts = {}
@@ -336,8 +336,8 @@ function ns:DebugAuraContainers(out)
                 end
                 local okU, u = pcall(function() return c.GetUnit and c:GetUnit() end)
                 local okE, e = pcall(function() return c.IsEnabled and c:IsEnabled() end)
-                out("AuraContainer", unit, kind, "Unit:", okU and u or "?", "an:", okE and e or "?",
-                    "sichtbar:", c:IsVisible(), "Icons(angelegt/sichtbar):", table.concat(counts, " "))
+                out("AuraContainer", unit, kind, "Unit:", okU and u or "?", "enabled:", okE and e or "?",
+                    "visible:", c:IsVisible(), "icons(created/shown):", table.concat(counts, " "))
             end
             -- Methoden einmal auflisten (Suche nach Refresh/Update o. ä.)
             local c = ac.buffs
@@ -357,7 +357,7 @@ function ns:DebugAuraContainers(out)
                 if type(v) == "function" and type(k) == "string" then names[#names + 1] = k end
             end
             table.sort(names)
-            out("AuraContainer Methoden:", table.concat(names, ", "))
+            out("AuraContainer methods:", table.concat(names, ", "))
         end
     end
 end

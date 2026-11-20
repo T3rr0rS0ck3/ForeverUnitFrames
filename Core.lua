@@ -1,5 +1,6 @@
 -- ForeverUnitFrames: Kern (Datenbank, Profile, Events, Slash-Befehl)
 local ADDON, ns = ...
+local L = ns.L
 
 ns.frames = {}
 
@@ -182,7 +183,7 @@ function ns:ApplyAll()
     if InCombatLockdown() then
         if not pendingApply then
             pendingApply = true
-            print("|cffd8a64aForeverUnitFrames:|r Änderung wird nach dem Kampf übernommen.")
+            print("|cffd8a64aForeverUnitFrames:|r " .. L["Change will be applied after combat."])
         end
         -- Farben und Texte gehen auch im Kampf
         for _, f in pairs(ns.frames) do ns.Try(f.UpdateAll, f) end
@@ -266,12 +267,12 @@ SlashCmdList.FOREVERFRAMES = function(msg)
         if not InCombatLockdown() then ShowUIPanel(EditModeManagerFrame) end
     elseif msg == "unlock" or msg == "lock" then
         if InCombatLockdown() then
-            print("|cffd8a64aForeverUnitFrames:|r Im Kampf nicht möglich.")
+            print("|cffd8a64aForeverUnitFrames:|r " .. L["Not possible in combat."])
             return
         end
         ns.profile.locked = (msg == "lock")
         ns:ApplyAll()
-        print("|cffd8a64aForeverUnitFrames:|r Rahmen " .. (ns.profile.locked and "gesperrt." or "entsperrt. Mit der Maus verschieben, danach /ff lock."))
+        print("|cffd8a64aForeverUnitFrames:|r " .. (ns.profile.locked and L["Frames locked."] or L["Frames unlocked. Drag them with the mouse, then /ff lock."]))
     elseif msg == "auras" then
         ns:DebugAuras()
 

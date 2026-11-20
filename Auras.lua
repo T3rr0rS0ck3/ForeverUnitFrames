@@ -1,5 +1,6 @@
 -- ForeverUnitFrames: Debuffs und Buffs für Spieler und Ziel
 local _, ns = ...
+local L = ns.L
 
 local MAX_AURAS   = 24
 local SIZE_BIG    = 26
@@ -208,7 +209,7 @@ end
 local function OnEnter(self)
     GameTooltip:SetOwner(self, "ANCHOR_BOTTOMRIGHT")
     if self.sampleName then
-        GameTooltip:SetText(self.sampleName .. " |cff999999(Beispiel)|r")
+        GameTooltip:SetText(self.sampleName .. " |cff999999(" .. L["Sample"] .. ")|r")
         GameTooltip:Show()
         return
     end
@@ -526,7 +527,7 @@ pcall(payloadFrame.RegisterUnitEvent, payloadFrame, "UNIT_AURA", "player", "targ
 payloadFrame:SetScript("OnEvent", function(_, _, unit, info)
     -- Im Kampf sind die Tabellen selbst geheim: dann nicht einmal die Länge abfragen
     local function Count(t)
-        if IsSecret(t) then return "geheim" end
+        if IsSecret(t) then return "secret" end
         if type(t) == "table" then return #t end
     end
     local r = { time = GetTime(), hasInfo = (not IsSecret(info)) and type(info) == "table" }
@@ -546,14 +547,14 @@ function ns:DebugAuras()
         local parts = {}
         for i = 1, select("#", ...) do
             local v = select(i, ...)
-            parts[#parts + 1] = IsSecret(v) and "<geheim>" or tostring(v)
+            parts[#parts + 1] = IsSecret(v) and "<secret>" or tostring(v)
         end
         local line = table.concat(parts, " ")
         lines[#lines + 1] = line
         print("|cffd8a64aFUF:|r " .. line)
     end
-    local function has(v) return v and "ja" or "nein" end
-    local function val(v) if IsSecret(v) then return "<geheim>" end return tostring(v) end
+    local function has(v) return v and "yes" or "no" end
+    local function val(v) if IsSecret(v) then return "<secret>" end return tostring(v) end
 
     out("Client:", (GetBuildInfo()), select(4, GetBuildInfo()))
     out("API C_UnitAuras:", has(C_UnitAuras), "GetAuraDataByIndex", has(AuraAPI.GetAuraDataByIndex),
@@ -565,8 +566,8 @@ function ns:DebugAuras()
     out("API alt: UnitAura", has(UnitAura), "UnitBuff", has(UnitBuff), "UnitDebuff", has(UnitDebuff),
         "C_Secrets", has(C_Secrets), "SetCooldownFromDurationObject", has(CreateFrame("Cooldown").SetCooldownFromDurationObject))
     local inInst, instType = IsInInstance()
-    out("Zustand: Kampf", val(InCombatLockdown()), "UnitAffectingCombat", val(UnitAffectingCombat("player")),
-        "Instanz", val(inInst), val(instType))
+    out("State: combat", val(InCombatLockdown()), "UnitAffectingCombat", val(UnitAffectingCombat("player")),
+        "instance", val(inInst), val(instType))
     for _, tblName in ipairs({ "C_Secrets", "C_UnitAuras" }) do
         local t = _G[tblName]
         if type(t) == "table" then
@@ -581,9 +582,9 @@ function ns:DebugAuras()
         "dispelName", "isStealable", "isFromPlayerOrPlayerPet", "sourceUnit" }
     for _, unit in ipairs({ "player", "target" }) do
         if not UnitExists(unit) then
-            out(unit, "nicht vorhanden")
+            out(unit, "does not exist")
         else
-            out("==", unit, val(UnitName(unit)), "angreifbar:", val(UnitCanAttack("player", unit)))
+            out("==", unit, val(UnitName(unit)), "attackable:", val(UnitCanAttack("player", unit)))
             -- einzelne Auren per Index, auch nach einem Fehler weiter probieren
             for _, filter in ipairs({ "HELPFUL", "HARMFUL", "HELPFUL|PLAYER", "HARMFUL|PLAYER", "HARMFUL|RAID", "HELPFUL|RAID" }) do
                 local okN, errN, firstErr = 0, 0, nil
@@ -602,18 +603,18 @@ function ns:DebugAuras()
                         firstErr = firstErr or i
                     end
                 end
-                out(unit, filter, "Index einzeln: lesbar", okN, "verweigert", errN,
-                    "| IndexGeheim 1-5:", #secInfo > 0 and table.concat(secInfo, ",") or "-")
+                out(unit, filter, "Index single: readable", okN, "denied", errN,
+                    "| IndexSecret 1-5:", #secInfo > 0 and table.concat(secInfo, ",") or "-")
             end
             if C_Secrets then
                 for _, fn in ipairs({ "ShouldAurasBeSecret", "ShouldUnitAurasBeSecret", "ShouldUnitAuraInstanceBeSecret" }) do
                     if C_Secrets[fn] then
                         local ok2, r = pcall(C_Secrets[fn], unit)
-                        out("C_Secrets." .. fn .. "(" .. unit .. "):", ok2 and val(r) or ("fehler " .. tostring(r)))
+                        out("C_Secrets." .. fn .. "(" .. unit .. "):", ok2 and val(r) or ("error " .. tostring(r)))
                     end
                 end
             end
-            out(unit, "Auren gesperrt:", AurasLocked(unit))
+            out(unit, "auras locked:", AurasLocked(unit))
             -- Weg über Spell-IDs (außerhalb des Kampfes gesehene Auren)
             local tested = 0
             for id, name in pairs(seenSpells) do
@@ -621,38 +622,38 @@ function ns:DebugAuras()
                 tested = tested + 1
                 local info = {}
                 if C_Secrets and C_Secrets.GetSpellAuraSecrecy then
-                    local ok2, r = pcall(C_Secrets.GetSpellAuraSecrecy, id); info[#info + 1] = "Secrecy=" .. (ok2 and val(r) or "fehler")
+                    local ok2, r = pcall(C_Secrets.GetSpellAuraSecrecy, id); info[#info + 1] = "Secrecy=" .. (ok2 and val(r) or "error")
                 end
                 if C_Secrets and C_Secrets.ShouldSpellAuraBeSecret then
-                    local ok2, r = pcall(C_Secrets.ShouldSpellAuraBeSecret, id); info[#info + 1] = "geheim=" .. (ok2 and val(r) or "fehler")
+                    local ok2, r = pcall(C_Secrets.ShouldSpellAuraBeSecret, id); info[#info + 1] = "secret=" .. (ok2 and val(r) or "error")
                 end
                 if AuraAPI.GetUnitAuraBySpellID then
                     local ok2, r = pcall(AuraAPI.GetUnitAuraBySpellID, unit, id)
-                    info[#info + 1] = "BySpellID=" .. (ok2 and (type(r) == "table" and "LESBAR" or val(r)) or ("FEHLER " .. tostring(r):match("^[^\n]*")))
+                    info[#info + 1] = "BySpellID=" .. (ok2 and (type(r) == "table" and "READABLE" or val(r)) or ("ERROR " .. tostring(r):match("^[^\n]*")))
                 end
                 if unit == "player" and AuraAPI.GetPlayerAuraBySpellID then
                     local ok2, r = pcall(AuraAPI.GetPlayerAuraBySpellID, id)
-                    info[#info + 1] = "Player=" .. (ok2 and (type(r) == "table" and "LESBAR" or val(r)) or ("FEHLER " .. tostring(r):match("^[^\n]*")))
+                    info[#info + 1] = "Player=" .. (ok2 and (type(r) == "table" and "READABLE" or val(r)) or ("ERROR " .. tostring(r):match("^[^\n]*")))
                 end
                 out(unit, "Spell", id, name, table.concat(info, " "))
             end
-            if tested == 0 then out(unit, "noch keine Spell-IDs gesehen (erst außerhalb des Kampfes /ff auras)") end
+            if tested == 0 then out(unit, "no spell IDs seen yet (run /ff auras out of combat first)") end
 
             local pl = lastPayload[unit]
             if pl then
-                out(unit, "letztes UNIT_AURA vor", format("%.0fs", GetTime() - pl.time), "Daten:", pl.hasInfo,
-                    "voll:", val(pl.full), "neu:", val(pl.added), "geändert:", val(pl.updated), "entfernt:", val(pl.removed))
+                out(unit, "last UNIT_AURA", format("%.0fs", GetTime() - pl.time), "ago, data:", pl.hasInfo,
+                    "full:", val(pl.full), "added:", val(pl.added), "updated:", val(pl.updated), "removed:", val(pl.removed))
                 if pl.sample then
                     local f = {}
                     for _, k in ipairs(FIELDS) do f[#f + 1] = k .. "=" .. val(pl.sample[k]) end
-                    out(unit, "Event-Aura:", table.concat(f, " "))
+                    out(unit, "event aura:", table.concat(f, " "))
                     if AuraAPI.GetAuraDataByAuraInstanceID then
                         local ok2, a = pcall(AuraAPI.GetAuraDataByAuraInstanceID, unit, pl.sample.auraInstanceID)
-                        out(unit, "GetAuraDataByAuraInstanceID(Event-ID):", ok2 and (type(a) == "table" and "lesbar" or tostring(a)) or ("FEHLER " .. tostring(a)))
+                        out(unit, "GetAuraDataByAuraInstanceID(event ID):", ok2 and (type(a) == "table" and "readable" or tostring(a)) or ("ERROR " .. tostring(a)))
                     end
                 end
             else
-                out(unit, "noch kein UNIT_AURA empfangen")
+                out(unit, "no UNIT_AURA received yet")
             end
 
             for _, filter in ipairs({ "HELPFUL", "HARMFUL" }) do
@@ -661,17 +662,17 @@ function ns:DebugAuras()
                 for _, st in ipairs(STRATEGIES) do
                     local ok, list = pcall(st.fn, unit, filter)
                     if ok then
-                        out(unit, filter, st.name .. ":", #list, "Auren")
+                        out(unit, filter, st.name .. ":", #list, "auras")
                         if not good and #list > 0 then good = list end
                     else
-                        out(unit, filter, st.name .. ": FEHLER", list)
+                        out(unit, filter, st.name .. ": ERROR", list)
                     end
                 end
                 for i, raw in ipairs(good or {}) do
                     local f = {}
                     for _, k in ipairs(FIELDS) do f[#f + 1] = k .. "=" .. val(raw[k]) end
                     local a = ReadAura(unit, raw, i, filter)
-                    f[#f + 1] = "eigen=" .. tostring(a.own)
+                    f[#f + 1] = "own=" .. tostring(a.own)
                     out(unit, filter, "#" .. i, table.concat(f, " "))
                 end
             end
@@ -679,34 +680,34 @@ function ns:DebugAuras()
             -- Was zeigt unser Frame gerade an?
             local fr = ns.frames and ns.frames[unit]
             if fr then
-                out("Frame", unit, "sichtbar:", fr:IsVisible(), "alpha:", fr:GetEffectiveAlpha())
+                out("Frame", unit, "visible:", fr:IsVisible(), "alpha:", fr:GetEffectiveAlpha())
                 for _, key in ipairs({ "auras", "buffs" }) do
                     local c = rawget(fr, key)
                     if type(c) == "table" and c.icons then
                         local shown = 0
                         for _, b in ipairs(c.icons) do if b:IsShown() then shown = shown + 1 end end
                         local pt, rel, rp, x, y = c:GetPoint(1)
-                        out(" ", key, "Liste:", #c.list, "Icons sichtbar:", shown, "Container sichtbar:", c:IsVisible(),
-                            "Höhe:", c:GetHeight(), "Anker:", pt, rel and (rel.GetName and rel:GetName() or "frame"), rp, x, y)
+                        out(" ", key, "list:", #c.list, "icons visible:", shown, "container visible:", c:IsVisible(),
+                            "height:", c:GetHeight(), "anchor:", pt, rel and (rel.GetName and rel:GetName() or "frame"), rp, x, y)
                     else
-                        out(" ", key, "fehlt")
+                        out(" ", key, "missing")
                     end
                 end
             else
-                out("Frame", unit, "nicht gefunden")
+                out("Frame", unit, "not found")
             end
         end
     end
 
     if ns.DebugAuraContainers then
         local ok, err = pcall(ns.DebugAuraContainers, ns, out)
-        if not ok then out("AuraContainer-Debug Fehler:", err) end
+        if not ok then out("AuraContainer debug error:", err) end
     end
 
     -- auch in den SavedVariables ablegen (nach /reload in WTF lesbar)
     ForeverUnitFramesDB = ForeverUnitFramesDB or {}
     ForeverUnitFramesDB.auraDebug = { time = date("%Y-%m-%d %H:%M:%S"), lines = lines }
-    print("|cffd8a64aFUF:|r Gespeichert. Mit /reload wird es auf die Festplatte geschrieben.")
+    print("|cffd8a64aFUF:|r " .. L["Saved. Use /reload to write it to disk."])
 end
 
 ---------------------------------------------------------------------------

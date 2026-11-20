@@ -1,11 +1,13 @@
 ## Interface: 16001
 ## Title: ForeverUnitFrames
-## Notes: Flache Spieler- und Ziel-Frames mit Debuffs, Profilen und eigener Skalierung pro Frame.
+## Notes: Flat player and target frames with debuffs, profiles and per-frame scaling.
+## Notes-deDE: Flache Spieler- und Ziel-Frames mit Debuffs, Profilen und eigener Skalierung pro Frame.
 ## Author: Robin
 ## Version: @project-version@
 ## X-Curse-Project-ID: 1801242
 ## SavedVariables: ForeverUnitFramesDB
 
+Locales.lua
 Core.lua
 Auras.lua
 Frames.lua

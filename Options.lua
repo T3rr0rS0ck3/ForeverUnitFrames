@@ -1,6 +1,7 @@
 -- ForeverUnitFrames: Einstellungen unter Optionen → AddOns
 -- Hauptseite "ForeverUnitFrames" (Optik) mit Unterseiten Spieler, Ziel, Profile
 local _, ns = ...
+local L = ns.L
 
 local refreshers = {}
 
@@ -164,7 +165,7 @@ local function ConfirmButton(parent, text, width, x, y, action)
             Refresh()
         else
             self.armed = GetTime()
-            self:SetText("Sicher? Nochmal klicken")
+            self:SetText(L["Sure? Click again"])
             C_Timer.After(4, function()
                 if self.armed and GetTime() - self.armed >= 4 then
                     self.armed = nil; self:SetText(text)
@@ -259,7 +260,7 @@ local function BuildMain(page)
     local sub = Label(page, "", 0, 0, 12)
     sub:ClearAllPoints()
     sub:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -6)
-    sub:SetText("Flache Spieler- und Ziel-Frames mit Debuffs   ·   Version " .. version)
+    sub:SetText(L["Flat player and target frames with debuffs"] .. "   ·   " .. L["Version"] .. " " .. version)
 
     -- Anleitung
     local H = "|cffd8a64a"
@@ -274,45 +275,47 @@ local function BuildMain(page)
     guide:SetPoint("RIGHT", page, "RIGHT", -24, 0)
     guide:SetWordWrap(true)
     guide:SetText(table.concat({
-        H .. "Einstellungen|r",
-        "Links unter ForeverUnitFrames findest du die Seiten Spieler, Ziel und Profile. Jeder Frame hat dort seine eigene Größe, Farbe, Textur und sein eigenes Portrait.",
+        H .. L["Settings"] .. "|r",
+        L["On the left under ForeverUnitFrames you will find the pages Player, Target and Profiles. Each frame has its own size, color, texture and portrait there."],
         "",
-        H .. "Verschieben|r",
-        "Über Esc den Bearbeitungsmodus öffnen und die blau markierten Frames ziehen. Beim Loslassen rasten sie am anderen Frame ein (gleiche Höhe, untereinander oder spiegelbildlich) und, falls aktiviert, am Raster.",
+        H .. L["Moving"] .. "|r",
+        L["Open Edit Mode via Esc and drag the frames highlighted in blue. When released they snap to the other frame (same height, stacked or mirrored) and, if enabled, to the grid."],
         "",
-        H .. "Buffs|r",
-        "Stehen standardmäßig über dem Frame. Goldrahmen: von dir. Blau leuchtend: auf einem Gegner und von dir entfernbar.",
+        H .. L["Buffs"] .. "|r",
+        L["Shown above the frame by default. Gold border: cast by you. Glowing blue: on an enemy and removable by you."],
         "",
-        H .. "Debuffs|r",
-        "Große Symbole: von dir. Kleine, blasse Symbole: von anderen. Die Rahmenfarbe zeigt den Typ: |cff3399ffMagie|r, |cff9900ffFluch|r, |cff996600Krankheit|r, |cff009900Gift|r. Was du selbst entfernen kannst, leuchtet auf deinem Frame.",
+        H .. L["Debuffs"] .. "|r",
+        format(L["Large icons: cast by you. Small, faded icons: cast by others. The border color shows the type: %s, %s, %s, %s. Anything you can remove yourself glows on your frame."],
+            "|cff3399ff" .. L["Magic"] .. "|r", "|cff9900ff" .. L["Curse"] .. "|r",
+            "|cff996600" .. L["Disease"] .. "|r", "|cff009900" .. L["Poison"] .. "|r"),
         "",
-        H .. "Bedienung|r",
-        "Linksklick auf einen Frame wählt die Einheit aus, Rechtsklick öffnet ihr Menü.",
+        H .. L["Controls"] .. "|r",
+        L["Left-click a frame to target the unit, right-click opens its menu."],
         "",
-        H .. "Befehle|r",
-        "|cffffffff/ff|r  –  öffnet diese Einstellungen",
-        "|cffffffff/ff unlock|r  –  öffnet den Bearbeitungsmodus zum Verschieben",
-        "|cffffffff/foreverframes|r  –  gleich wie /ff",
+        H .. L["Commands"] .. "|r",
+        "|cffffffff/ff|r  –  " .. L["opens these settings"],
+        "|cffffffff/ff unlock|r  –  " .. L["opens Edit Mode for moving frames"],
+        "|cffffffff/foreverframes|r  –  " .. L["same as /ff"],
     }, "\n"))
 
     -- Optionen direkt unter dem Textende, egal wie lang er umbricht
-    local cb = Checkbox(page, "Blizzard-Spieler- und Zielrahmen ausblenden", { "hideBlizzard" }, 14, 0)
+    local cb = Checkbox(page, L["Hide Blizzard player and target frames"], { "hideBlizzard" }, 14, 0)
     cb:ClearAllPoints()
     cb:SetPoint("TOPLEFT", guide, "BOTTOMLEFT", -2, -18)
-    local hint = Label(page, "Wieder einblenden wirkt erst nach /reload.", 0, 0, 10)
+    local hint = Label(page, L["Showing them again only takes effect after /reload."], 0, 0, 10)
     hint:ClearAllPoints()
     hint:SetPoint("TOPLEFT", cb, "BOTTOMLEFT", 30, -2)
-    local cbBuffs = Checkbox(page, "Blizzards Buffleiste oben rechts ausblenden", { "hideBlizzBuffs" }, 14, 0)
+    local cbBuffs = Checkbox(page, L["Hide Blizzard's buff bar (top right)"], { "hideBlizzBuffs" }, 14, 0)
     cbBuffs:ClearAllPoints()
     cbBuffs:SetPoint("TOPLEFT", hint, "BOTTOMLEFT", -30, -10)
-    local cbDebuffs = Checkbox(page, "Blizzards Debuffleiste oben rechts ausblenden", { "hideBlizzDebuffs" }, 14, 0)
+    local cbDebuffs = Checkbox(page, L["Hide Blizzard's debuff bar (top right)"], { "hideBlizzDebuffs" }, 14, 0)
     cbDebuffs:ClearAllPoints()
     cbDebuffs:SetPoint("TOPLEFT", cbBuffs, "BOTTOMLEFT", 0, -4)
-    local hint2 = Label(page, "Buffs abbrechen per Rechtsklick geht nur über Blizzards Buffleiste.", 0, 0, 10)
+    local hint2 = Label(page, L["Cancelling buffs with right-click only works via Blizzard's buff bar."], 0, 0, 10)
     hint2:ClearAllPoints()
     hint2:SetPoint("TOPLEFT", cbDebuffs, "BOTTOMLEFT", 30, -2)
     if not ns.hasEditMode then
-        local lock = Checkbox(page, "Rahmen gesperrt (Haken entfernen zum Verschieben)", { "locked" }, 14, 0)
+        local lock = Checkbox(page, L["Frames locked (uncheck to move them)"], { "locked" }, 14, 0)
         lock:ClearAllPoints()
         lock:SetPoint("TOPLEFT", hint2, "BOTTOMLEFT", -30, -8)
     end
@@ -334,7 +337,7 @@ local function BuildPreview(content, key)
     local edge = stage:CreateTexture(nil, "BORDER")
     edge:SetPoint("BOTTOMLEFT"); edge:SetPoint("BOTTOMRIGHT"); edge:SetHeight(1)
     edge:SetColorTexture(0.85, 0.65, 0.29, 0.35)
-    local cap = Label(stage, "Vorschau (Beispieldaten)", 8, -6, 10)
+    local cap = Label(stage, L["Preview (sample data)"], 8, -6, 10)
 
     local pv = ns:CreatePreview(key, stage)
     -- Kastenoberkante etwa im oberen Drittel, damit Buffs darüber Platz haben
@@ -349,30 +352,30 @@ local function BuildUnit(content, key)
     local p = CreateFrame("Frame", nil, content)
     p:SetPoint("TOPLEFT", 0, -PREVIEW_H)
     p:SetPoint("BOTTOMRIGHT")
-    local L, R = 16, 320
+    local LX, R = 16, 320
 
     -- linke Spalte
-    Section(p, "Allgemein", L, -4)
-    Slider(p, "Skalierung", { key, "scale" }, 0.5, 2.0, 0.05, L, -30)
-    Checkbox(p, key == "player" and "Deine Debuffs anzeigen" or "Debuffs anzeigen", { key, "showDebuffs" }, L - 2, -76)
+    Section(p, L["General"], LX, -4)
+    Slider(p, L["Scale"], { key, "scale" }, 0.5, 2.0, 0.05, LX, -30)
+    Checkbox(p, key == "player" and L["Show your debuffs"] or L["Show debuffs"], { key, "showDebuffs" }, LX - 2, -76)
     local y = -104
     if key == "target" then
-        Checkbox(p, "Nur eigene Debuffs zeigen", { key, "onlyOwnDebuffs" }, L - 2, -104)
+        Checkbox(p, L["Show only own debuffs"], { key, "onlyOwnDebuffs" }, LX - 2, -104)
         y = -132
     end
-    Checkbox(p, "PvP-Symbol anzeigen", { key, "showPvP" }, L - 2, y)
+    Checkbox(p, L["Show PvP icon"], { key, "showPvP" }, LX - 2, y)
     y = y - 28
 
-    Section(p, "Balken", L, y - 10)
+    Section(p, L["Bars"], LX, y - 10)
     y = y - 36
-    OptionDropdown(p, "Farbe", { key, "healthColor" }, {
-        { "class", "Klassenfarbe (Standard)" },
-        { "health", "Nach Lebenspunkten" },
-        { "custom", "Eigene Farbe" },
-    }, L, y)
+    OptionDropdown(p, L["Color"], { key, "healthColor" }, {
+        { "class", L["Class color (default)"] },
+        { "health", L["By health"] },
+        { "custom", L["Custom color"] },
+    }, LX, y)
     local swatch = CreateFrame("Button", nil, p)
     swatch:SetSize(22, 22)
-    swatch:SetPoint("TOPLEFT", L + 230, y - 18)
+    swatch:SetPoint("TOPLEFT", LX + 230, y - 18)
     local swEdge = swatch:CreateTexture(nil, "BACKGROUND")
     swEdge:SetAllPoints(); swEdge:SetColorTexture(0, 0, 0, 1)
     local swTex = swatch:CreateTexture(nil, "ARTWORK")
@@ -386,90 +389,92 @@ local function BuildUnit(content, key)
         swatch:SetShown(ns.profile[key].healthColor == "custom")
     end
     if key == "target" then
-        Label(p, "NPCs nutzen immer die Reaktionsfarbe.", L, y - 46, 10)
+        Label(p, L["NPCs always use the reaction color."], LX, y - 46, 10)
     end
 
     y = y - 62
-    OptionDropdown(p, "Text im Balken", { key, "textMode" }, {
-        { "both", "Wert + Prozent" }, { "pct", "Nur Prozent" },
-        { "val", "Wert / Maximum" }, { "none", "Kein Text" },
-    }, L, y)
+    OptionDropdown(p, L["Bar text"], { key, "textMode" }, {
+        { "both", L["Value + percent"] }, { "pct", L["Percent only"] },
+        { "val", L["Value / maximum"] }, { "none", L["No text"] },
+    }, LX, y)
 
     y = y - 54
-    Dropdown(p, "Textur", L, y, 220,
+    Dropdown(p, L["Texture"], LX, y, 220,
         function()
-            -- Wert = Name, Anzeige = Name ohne Pfad (nur der letzte Teil)
+            -- Wert = Name, Anzeige = übersetzter Name bzw. Name ohne Pfad (nur der letzte Teil)
             local o = {}
             for _, t in ipairs(ns:GetBarTextures()) do
-                o[#o + 1] = { t[1], t[1]:match("([^\\/]+)$") or t[1] }
+                o[#o + 1] = { t[1], t[3] or t[1]:match("([^\\/]+)$") or t[1] }
             end
             return o
         end,
         function() return ns.profile[key].barTexture end,
         function(v) ns.profile[key].barTexture = v; ns:ApplyAll() end)
-    Checkbox(p, "Schattierung (dunkle untere Hälfte)", { key, "barShade" }, L - 2, y - 50)
-    Checkbox(p, "Eingehende Heilung anzeigen", { key, "showHealPrediction" }, L - 2, y - 76)
+    Checkbox(p, L["Shading (dark lower half)"], { key, "barShade" }, LX - 2, y - 50)
+    Checkbox(p, L["Show incoming heals"], { key, "showHealPrediction" }, LX - 2, y - 76)
 
     -- Drachen-Ornament (linke Spalte unten)
     y = y - 118
-    Section(p, "Ornament (Blizzard-Drache)", L, y)
+    Section(p, L["Ornament (Blizzard dragon)"], LX, y)
     local ornOpts = {}
-    if key == "target" then ornOpts[#ornOpts + 1] = { "auto", "Automatisch (nach Gegner)" } end
+    if key == "target" then ornOpts[#ornOpts + 1] = { "auto", L["Automatic (by enemy)"] } end
     for _, o in ipairs({
-        { "none", "Keins" }, { "elite", "Elite (Gold)" },
-        { "rareelite", "Rar-Elite (Silber)" }, { "worldboss", "Boss" },
+        { "none", L["None"] }, { "elite", L["Elite (gold)"] },
+        { "rareelite", L["Rare Elite (silver)"] }, { "worldboss", L["Boss"] },
     }) do ornOpts[#ornOpts + 1] = o end
-    OptionDropdown(p, key == "player" and "Optik (nur Aussehen)" or "Anzeige", { key, "ornament" }, ornOpts, L, y - 26)
-    Label(p, "Die Größe richtet sich automatisch nach der Portrait-Größe.", L, y - 76, 10)
-    Slider(p, "Versatz X (+ = nach außen)", { key, "ornX" }, -60, 60, 1, L, y - 96, "%d")
-    Slider(p, "Versatz Y (+ = nach oben)", { key, "ornY" }, -60, 60, 1, L, y - 144, "%d")
+    OptionDropdown(p, key == "player" and L["Style (looks only)"] or L["Display"], { key, "ornament" }, ornOpts, LX, y - 26)
+    Label(p, L["The size follows the portrait size automatically."], LX, y - 76, 10)
+    Slider(p, L["Offset X (+ = outward)"], { key, "ornX" }, -60, 60, 1, LX, y - 96, "%d")
+    Slider(p, L["Offset Y (+ = upward)"], { key, "ornY" }, -60, 60, 1, LX, y - 144, "%d")
 
     -- rechte Spalte
-    Section(p, "Portrait", R, -4)
-    Checkbox(p, "Portrait anzeigen", { key, "portrait" }, R - 2, -28)
+    Section(p, L["Portrait"], R, -4)
+    Checkbox(p, L["Show portrait"], { key, "portrait" }, R - 2, -28)
     local shapes = {}
     for _, s in ipairs(ns.PORTRAIT_SHAPES) do shapes[#shapes + 1] = s end
-    OptionDropdown(p, "Form", { key, "portraitShape" }, shapes, R, -60)
-    Slider(p, "Größe", { key, "portraitSize" }, 40, 110, 1, R, -114, "%d px")
-    Slider(p, "Versatz X (+ = nach außen)", { key, "portraitX" }, -40, 40, 1, R, -162, "%d")
-    Slider(p, "Versatz Y (+ = nach oben)", { key, "portraitY" }, -40, 40, 1, R, -210, "%d")
+    OptionDropdown(p, L["Shape"], { key, "portraitShape" }, shapes, R, -60)
+    Slider(p, L["Size"], { key, "portraitSize" }, 40, 110, 1, R, -114, "%d px")
+    Slider(p, L["Offset X (+ = outward)"], { key, "portraitX" }, -40, 40, 1, R, -162, "%d")
+    Slider(p, L["Offset Y (+ = upward)"], { key, "portraitY" }, -40, 40, 1, R, -210, "%d")
 
     -- Buffs (rechte Spalte unter dem Portrait)
-    Section(p, "Buffs", R, -258)
-    Checkbox(p, "Buffs anzeigen", { key, "showBuffs" }, R - 2, -282)
-    OptionDropdown(p, "Position", { key, "buffPos" }, {
-        { "top", "Über dem Frame (Standard)" },
-        { "bottom", "Unter den Debuffs" },
-        { "side", "Neben dem Frame (innen)" },
+    Section(p, L["Buffs"], R, -258)
+    Checkbox(p, L["Show buffs"], { key, "showBuffs" }, R - 2, -282)
+    OptionDropdown(p, L["Position"], { key, "buffPos" }, {
+        { "top", L["Above the frame (default)"] },
+        { "bottom", L["Below the debuffs"] },
+        { "side", L["Beside the frame (inside)"] },
     }, R, -312)
-    OptionDropdown(p, "Filter", { key, "buffFilter" }, {
-        { "all", "Alle" },
-        { "own", "Nur eigene" },
-        { "short", "Nur kurze (unter 1 Minute)" },
-        { "steal", "Nur bannbare / stehlbare" },
+    OptionDropdown(p, L["Filter"], { key, "buffFilter" }, {
+        { "all", L["All"] },
+        { "own", L["Own only"] },
+        { "short", L["Short only (under 1 minute)"] },
+        { "steal", L["Dispellable / stealable only"] },
     }, R, -364)
-    Slider(p, "Symbolgröße", { key, "buffSize" }, 16, 32, 1, R, -418, "%d px")
-    Slider(p, "Maximale Anzahl", { key, "buffMax" }, 4, 24, 1, R, -464, "%d")
+    Slider(p, L["Icon size"], { key, "buffSize" }, 16, 32, 1, R, -418, "%d px")
+    Slider(p, L["Maximum count"], { key, "buffMax" }, 4, 24, 1, R, -464, "%d")
 end
 
 ---------------------------------------------------------------------------
 -- Profile
 ---------------------------------------------------------------------------
 local function BuildProfiles(p)
-    Label(p, "Charakter", 16, -6)
+    Label(p, L["Character"], 16, -6)
     local charLbl = Label(p, "", 16, -22, 12, { 1, 1, 1 })
     refreshers[#refreshers + 1] = function() charLbl:SetText(ns.charKey) end
 
+    -- Das Standardprofil heißt intern immer "Standard", angezeigt wird es übersetzt
+    local function ProfileLabel(n) return (n == "Standard") and L["Default"] or n end
     local function AllProfiles()
         local o = {}
-        for _, n in ipairs(ns:GetProfileNames()) do o[#o + 1] = { n, n } end
+        for _, n in ipairs(ns:GetProfileNames()) do o[#o + 1] = { n, ProfileLabel(n) } end
         return o
     end
-    Dropdown(p, "Aktives Profil", 16, -46, 220, AllProfiles,
+    Dropdown(p, L["Active profile"], 16, -46, 220, AllProfiles,
         function() return ns:GetProfileName() end,
         function(v) ns:SetProfile(v) end)
 
-    Label(p, "Neues Profil", 16, -100)
+    Label(p, L["New profile"], 16, -100)
     local eb = CreateFrame("EditBox", nil, p, "InputBoxTemplate")
     eb:SetSize(150, 20)
     eb:SetPoint("TOPLEFT", 22, -116)
@@ -478,12 +483,12 @@ local function BuildProfiles(p)
     local newBtn = CreateFrame("Button", nil, p, "UIPanelButtonTemplate")
     newBtn:SetSize(80, 22)
     newBtn:SetPoint("LEFT", eb, "RIGHT", 8, 0)
-    newBtn:SetText("Anlegen")
+    newBtn:SetText(L["Create"])
     local function CreateNew()
         if ns:NewProfile(eb:GetText()) then
             eb:SetText(""); eb:ClearFocus(); Refresh()
         else
-            print("|cffd8a64aForeverUnitFrames:|r Name fehlt oder ist schon vergeben.")
+            print("|cffd8a64aForeverUnitFrames:|r " .. L["Name missing or already taken."])
         end
     end
     newBtn:SetScript("OnClick", CreateNew)
@@ -494,11 +499,11 @@ local function BuildProfiles(p)
     local function OtherProfiles()
         local o = {}
         for _, n in ipairs(ns:GetProfileNames()) do
-            if n ~= ns:GetProfileName() then o[#o + 1] = { n, n } end
+            if n ~= ns:GetProfileName() then o[#o + 1] = { n, ProfileLabel(n) } end
         end
         return o
     end
-    Dropdown(p, "Einstellungen kopieren von", 16, -150, 220, OtherProfiles,
+    Dropdown(p, L["Copy settings from"], 16, -150, 220, OtherProfiles,
         function()
             if copySource == ns:GetProfileName() or (copySource and not ns.db.profiles[copySource]) then
                 copySource = nil
@@ -506,14 +511,14 @@ local function BuildProfiles(p)
             return copySource
         end,
         function(v) copySource = v end)
-    ConfirmButton(p, "Kopieren", 120, 248, -166, function()
+    ConfirmButton(p, L["Copy"], 120, 248, -166, function()
         if copySource then ns:CopyProfileFrom(copySource) end
     end)
 
-    ConfirmButton(p, "Profil zurücksetzen", 170, 16, -214, function() ns:ResetProfile() end)
-    local del = ConfirmButton(p, "Profil löschen", 150, 192, -214, function() ns:DeleteProfile() end)
+    ConfirmButton(p, L["Reset profile"], 170, 16, -214, function() ns:ResetProfile() end)
+    local del = ConfirmButton(p, L["Delete profile"], 150, 192, -214, function() ns:DeleteProfile() end)
     refreshers[#refreshers + 1] = function() del:SetEnabled(ns:GetProfileName() ~= "Standard") end
-    Label(p, "Position, Größe und Farben gehören zum Profil.\nJeder Charakter merkt sich sein eigenes Profil.", 16, -248, 10)
+    Label(p, L["Position, size and colors belong to the profile.\nEach character remembers its own profile."], 16, -248, 10)
 end
 
 ---------------------------------------------------------------------------
@@ -522,25 +527,25 @@ function ns:CreateOptions()
     main:Hide()
     main:SetScript("OnShow", Refresh)
     BuildMain(MakeScroll(main, 0, 820))
-    local player, playerC = NewPage("Spieler", 650 + PREVIEW_H)
+    local player, playerC = NewPage(L["Player"], 650 + PREVIEW_H)
     BuildUnit(playerC, "player")
-    local target, targetC = NewPage("Ziel", 650 + PREVIEW_H)
+    local target, targetC = NewPage(L["Target"], 650 + PREVIEW_H)
     BuildUnit(targetC, "target")
-    local prof, profC = NewPage("Profile")
+    local prof, profC = NewPage(L["Profiles"])
     BuildProfiles(profC)
 
     if Settings and Settings.RegisterCanvasLayoutCategory then
         local cat = Settings.RegisterCanvasLayoutCategory(main, "ForeverUnitFrames")
-        Settings.RegisterCanvasLayoutSubcategory(cat, player, "Spieler")
-        Settings.RegisterCanvasLayoutSubcategory(cat, target, "Ziel")
-        Settings.RegisterCanvasLayoutSubcategory(cat, prof, "Profile")
+        Settings.RegisterCanvasLayoutSubcategory(cat, player, L["Player"])
+        Settings.RegisterCanvasLayoutSubcategory(cat, target, L["Target"])
+        Settings.RegisterCanvasLayoutSubcategory(cat, prof, L["Profiles"])
         Settings.RegisterAddOnCategory(cat)
         ns.settingsCategory = cat
     elseif InterfaceOptions_AddCategory then
         main.name = "ForeverUnitFrames"
-        player.name, player.parent = "Spieler", "ForeverUnitFrames"
-        target.name, target.parent = "Ziel", "ForeverUnitFrames"
-        prof.name, prof.parent = "Profile", "ForeverUnitFrames"
+        player.name, player.parent = L["Player"], "ForeverUnitFrames"
+        target.name, target.parent = L["Target"], "ForeverUnitFrames"
+        prof.name, prof.parent = L["Profiles"], "ForeverUnitFrames"
         for _, pg in ipairs({ main, player, target, prof }) do InterfaceOptions_AddCategory(pg) end
         ns.legacyPanel = main
     end

@@ -1,5 +1,6 @@
 -- ForeverUnitFrames: Spieler- und Ziel-Frame (Design "Schiefer")
 local ADDON, ns = ...
+local L = ns.L
 
 local W        = 260   -- Breite des Balkenkastens
 local HP_H     = 30
@@ -17,12 +18,12 @@ local MEDIA    = "Interface\\AddOns\\" .. ADDON .. "\\Media\\"
 
 -- Formen für das Portrait (Masken liegen im Media-Ordner)
 ns.PORTRAIT_SHAPES = {
-    { "round",   "Rund" },
-    { "square",  "Eckig" },
-    { "rounded", "Abgerundet" },
-    { "hexagon", "Sechseck" },
-    { "octagon", "Achteck" },
-    { "diamond", "Raute" },
+    { "round",   L["Round"] },
+    { "square",  L["Square"] },
+    { "rounded", L["Rounded"] },
+    { "hexagon", L["Hexagon"] },
+    { "octagon", L["Octagon"] },
+    { "diamond", L["Diamond"] },
 }
 
 local REACTION = {
@@ -32,17 +33,18 @@ local REACTION = {
     tapped   = { 0.50, 0.50, 0.50 },
 }
 local CLASSIFICATION = {
-    elite = "Elite", rare = "Rar", rareelite = "Rar-Elite", worldboss = "Boss",
+    elite = L["Elite"], rare = L["Rare"], rareelite = L["Rare Elite"], worldboss = L["Boss"],
 }
 
 ---------------------------------------------------------------------------
 -- Balkentexturen: eingebaute + alles aus LibSharedMedia (falls ein anderes Addon sie mitbringt)
+-- { gespeicherter Schlüssel, Pfad, Anzeigename } - Schlüssel bleiben unverändert, damit alte Profile passen
 ---------------------------------------------------------------------------
 local BUILTIN_TEXTURES = {
-    { "Flach",            FLAT },
+    { "Flach",            FLAT, L["Flat"] },
     { "Blizzard",         "Interface\\TargetingFrame\\UI-StatusBar" },
     { "Blizzard Raid",    "Interface\\RaidFrame\\Raid-Bar-Hp-Fill" },
-    { "Glanz",            "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar" },
+    { "Glanz",            "Interface\\PaperDollInfoFrame\\UI-Character-Skills-Bar", L["Gloss"] },
 }
 
 local function LSM()
@@ -233,9 +235,9 @@ function UF:UpdateHealth()
 
     local mode, txt = s.textMode, ""
     if Clean(UnitIsDeadOrGhost(unit)) then
-        txt = Clean(UnitIsGhost(unit)) and "Geist" or "Tot"
+        txt = Clean(UnitIsGhost(unit)) and L["Ghost"] or L["Dead"]
     elseif Clean(UnitIsPlayer(unit)) and Clean(UnitIsConnected(unit)) == false then
-        txt = "Offline"
+        txt = L["Offline"]
     elseif mode ~= "none" then
         local valStr, maxStr, pctStr
         if secret then
@@ -285,7 +287,7 @@ function UF:UpdateName()
     if UnitExists(unit) then
         self.nameText:SetText(UnitName(unit))
     else
-        self.nameText:SetText(self.isTarget and "Ziel" or "")
+        self.nameText:SetText(self.isTarget and L["Target"] or "")
     end
 end
 
@@ -328,17 +330,17 @@ function UF:UpdateMeta()
 
     if self.isTarget then
         if Clean(UnitIsDead(unit)) then
-            self.metaRight:SetText("|cff999999tot|r")
+            self.metaRight:SetText("|cff999999" .. L["dead"] .. "|r")
         elseif Clean(UnitIsPlayer(unit)) and Clean(UnitIsFriend("player", unit)) then
             self.metaRight:SetText("")
         else
             local r = Clean(UnitReaction(unit, "player")) or 4
-            if r <= 3 then self.metaRight:SetText("|cffc9302cfeindlich|r")
-            elseif r == 4 then self.metaRight:SetText("|cffe3c23aneutral|r")
-            else self.metaRight:SetText("|cff40b35afreundlich|r") end
+            if r <= 3 then self.metaRight:SetText("|cffc9302c" .. L["hostile"] .. "|r")
+            elseif r == 4 then self.metaRight:SetText("|cffe3c23a" .. L["neutral"] .. "|r")
+            else self.metaRight:SetText("|cff40b35a" .. L["friendly"] .. "|r") end
         end
     else
-        self.metaRight:SetText(Clean(UnitAffectingCombat("player")) and "|cffe0675aKampf|r" or "")
+        self.metaRight:SetText(Clean(UnitAffectingCombat("player")) and "|cffe0675a" .. L["Combat"] .. "|r" or "")
     end
 end
 
@@ -434,30 +436,30 @@ local SAMPLE = {
     player = {
         pct = 0.86, power = 0.64, powerToken = "MANA",   -- Name und Level kommen vom eigenen Charakter
         buffs = {
-            { name = "Mal der Wildnis", icon = ICON .. "Spell_Nature_Regeneration", own = true, duration = 1800, rem = 1500 },
-            { name = "Verjüngung", icon = ICON .. "Spell_Nature_Rejuvenation", own = true, duration = 12, rem = 8 },
-            { name = "Machtwort: Seelenstärke", icon = ICON .. "Spell_Holy_WordFortitude", own = false, duration = 1800, rem = 900 },
-            { name = "Machtwort: Schild", icon = ICON .. "Spell_Holy_PowerWordShield", own = false, duration = 30, rem = 21 },
+            { name = L["Mark of the Wild"], icon = ICON .. "Spell_Nature_Regeneration", own = true, duration = 1800, rem = 1500 },
+            { name = L["Rejuvenation"], icon = ICON .. "Spell_Nature_Rejuvenation", own = true, duration = 12, rem = 8 },
+            { name = L["Power Word: Fortitude"], icon = ICON .. "Spell_Holy_WordFortitude", own = false, duration = 1800, rem = 900 },
+            { name = L["Power Word: Shield"], icon = ICON .. "Spell_Holy_PowerWordShield", own = false, duration = 30, rem = 21 },
         },
         debuffs = {
-            { name = "Fluch der Schwäche", icon = ICON .. "Spell_Shadow_CurseOfMannoroth", dispelName = "Curse", duration = 120, rem = 74 },
-            { name = "Gift", icon = ICON .. "Ability_Rogue_DualWeild", dispelName = "Poison", duration = 15, rem = 6, applications = 3 },
+            { name = L["Curse of Weakness"], icon = ICON .. "Spell_Shadow_CurseOfMannoroth", dispelName = "Curse", duration = 120, rem = 74 },
+            { name = L["Poison"], icon = ICON .. "Ability_Rogue_DualWeild", dispelName = "Poison", duration = 15, rem = 6, applications = 3 },
         },
     },
     target = {
-        name = "Kriegshäuptling Grimmhuf", level = 62, pct = 0.72, power = 1, powerToken = "RAGE",
-        classification = "Elite", ctype = "Humanoid", marker = 8,
+        name = L["Warchief Grimhoof"], level = 62, pct = 0.72, power = 1, powerToken = "RAGE",
+        classification = L["Elite"], ctype = L["Humanoid"], marker = 8,
         portraitIcon = ICON .. "INV_Misc_Head_Orc_01",
         buffs = {
-            { name = "Schlachtruf", icon = ICON .. "Ability_Warrior_BattleShout", own = false, duration = 120, rem = 95 },
-            { name = "Magierüstung", icon = ICON .. "Spell_Frost_FrostArmor02", own = false, duration = 1800, rem = 1200, dispelName = "Magic", isStealable = true },
-            { name = "Wutanfall", icon = ICON .. "Ability_Druid_ChallangingRoar", own = false, duration = 10, rem = 4 },
+            { name = L["Battle Shout"], icon = ICON .. "Ability_Warrior_BattleShout", own = false, duration = 120, rem = 95 },
+            { name = L["Mage Armor"], icon = ICON .. "Spell_Frost_FrostArmor02", own = false, duration = 1800, rem = 1200, dispelName = "Magic", isStealable = true },
+            { name = L["Enrage"], icon = ICON .. "Ability_Druid_ChallangingRoar", own = false, duration = 10, rem = 4 },
         },
         debuffs = {
-            { name = "Krallenhieb", icon = ICON .. "Ability_Druid_Disembowel", own = true, duration = 9, rem = 6 },
-            { name = "Feenfeuer", icon = ICON .. "Spell_Nature_FaerieFire", own = true, duration = 40, rem = 31, dispelName = "Magic" },
-            { name = "Rüstung zerreißen", icon = ICON .. "Ability_Warrior_Sunder", own = false, duration = 30, rem = 22, applications = 5 },
-            { name = "Schattenwort: Schmerz", icon = ICON .. "Spell_Shadow_ShadowWordPain", own = false, duration = 18, rem = 11, dispelName = "Magic" },
+            { name = L["Rake"], icon = ICON .. "Ability_Druid_Disembowel", own = true, duration = 9, rem = 6 },
+            { name = L["Faerie Fire"], icon = ICON .. "Spell_Nature_FaerieFire", own = true, duration = 40, rem = 31, dispelName = "Magic" },
+            { name = L["Sunder Armor"], icon = ICON .. "Ability_Warrior_Sunder", own = false, duration = 30, rem = 22, applications = 5 },
+            { name = L["Shadow Word: Pain"], icon = ICON .. "Spell_Shadow_ShadowWordPain", own = false, duration = 18, rem = 11, dispelName = "Magic" },
         },
     },
 }
@@ -499,7 +501,7 @@ function UF:PreviewUpdate()
     if d.classification then parts[#parts + 1] = d.classification end
     parts[#parts + 1] = d.ctype or (UnitClass("player"))
     self.metaLeft:SetText(table.concat(parts, " · "))
-    self.metaRight:SetText(self.isTarget and "|cffc9302cfeindlich|r" or "")
+    self.metaRight:SetText(self.isTarget and ("|cffc9302c" .. L["hostile"] .. "|r") or "")
 
     -- Portrait: eigenes Bild bzw. echtes Ziel, sonst Beispielbild
     if self.portraitOn then
@@ -562,7 +564,7 @@ local function OrnamentInfo(kind)
     ornCache[kind] = found
     if not found and not ornWarned then
         ornWarned = true
-        print("|cffd8a64aForeverUnitFrames:|r Drachen-Grafik nicht gefunden (" .. kind .. "). Bitte melden.")
+        print("|cffd8a64aForeverUnitFrames:|r " .. format(L["Dragon artwork not found (%s). Please report."], kind))
     end
     return found or nil
 end
@@ -1011,7 +1013,7 @@ BuildVisuals = function(f, unit)
     end
     local lbl = Text(mo, 12, "CENTER")
     lbl:SetPoint("CENTER")
-    lbl:SetText(f.isTarget and "ForeverUnitFrames: Ziel" or "ForeverUnitFrames: Spieler")
+    lbl:SetText(f.isTarget and L["ForeverUnitFrames: Target"] or L["ForeverUnitFrames: Player"])
     mo:Hide()
     f.moveOverlay = mo
 end
