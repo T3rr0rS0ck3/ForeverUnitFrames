@@ -11,6 +11,8 @@ local BOX_H    = PAD + HP_H + PAD + PW_H + PAD
 local PORTRAIT = 70    -- Startgröße, je Frame einstellbar
 local P_OVER   = 12    -- so weit ragt das Portrait ohne Versatz in den Kasten hinein
 local TEXT_PAD = 7     -- Abstand der Texte zum Balkenrand
+-- Grundgröße je Frame: Skalierung 1 entspricht diesem Faktor (Ziel des Ziels ist kleiner)
+local BASE_SCALE = { player = 1, target = 1, targettarget = 0.7 }
 local FONT     = STANDARD_TEXT_FONT
 local FLAT     = "Interface\\Buttons\\WHITE8X8"
 local MASK     = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
@@ -32,6 +34,15 @@ local REACTION = {
     friendly = { 0.25, 0.70, 0.35 },
     tapped   = { 0.50, 0.50, 0.50 },
 }
+-- Anzeigenamen der Frames (Platzhalter ohne Einheit, Markierung im Bearbeitungsmodus)
+local FRAME_LABEL = {
+    player = L["Player"], target = L["Target"], targettarget = L["Target of Target"],
+}
+local MOVE_LABEL = {
+    player = L["ForeverUnitFrames: Player"], target = L["ForeverUnitFrames: Target"],
+    targettarget = L["ForeverUnitFrames: Target of Target"],
+}
+
 local CLASSIFICATION = {
     elite = L["Elite"], rare = L["Rare"], rareelite = L["Rare Elite"], worldboss = L["Boss"],
 }
@@ -287,7 +298,7 @@ function UF:UpdateName()
     if UnitExists(unit) then
         self.nameText:SetText(UnitName(unit))
     else
-        self.nameText:SetText(self.isTarget and L["Target"] or "")
+        self.nameText:SetText(self.isTarget and FRAME_LABEL[self.key] or "")
     end
 end
 
@@ -462,6 +473,18 @@ local SAMPLE = {
             { name = L["Shadow Word: Pain"], icon = ICON .. "Spell_Shadow_ShadowWordPain", own = false, duration = 18, rem = 11, dispelName = "Magic" },
         },
     },
+    -- Ziel des Ziels: der Gegner hat dich im Visier (Name und Level vom eigenen Charakter)
+    targettarget = {
+        pct = 0.54, power = 0.40, powerToken = "MANA", friendly = true,
+        buffs = {
+            { name = L["Power Word: Fortitude"], icon = ICON .. "Spell_Holy_WordFortitude", own = false, duration = 1800, rem = 900 },
+            { name = L["Rejuvenation"], icon = ICON .. "Spell_Nature_Rejuvenation", own = true, duration = 12, rem = 8 },
+        },
+        debuffs = {
+            { name = L["Curse of Weakness"], icon = ICON .. "Spell_Shadow_CurseOfMannoroth", own = false, dispelName = "Curse", duration = 120, rem = 74 },
+            { name = L["Sunder Armor"], icon = ICON .. "Ability_Warrior_Sunder", own = false, duration = 30, rem = 22, applications = 2 },
+        },
+    },
 }
 
 function UF:PreviewUpdate()
@@ -472,7 +495,8 @@ function UF:PreviewUpdate()
     self.hp:SetValue(d.pct)
     self.heal:SetMinMaxValues(0, 1)
     self.heal:SetValue(self.isTarget and 0 or 0.15)   -- Beispiel: Heilung unterwegs
-    if self.isTarget then
+    local hostile = self.isTarget and not d.friendly
+    if hostile then
         self.hp:SetStatusBarColor(unpack(REACTION.hostile))
     else
         self.hp:SetStatusBarColor(UnitColor("player", d.pct, s))
@@ -501,17 +525,19 @@ function UF:PreviewUpdate()
     if d.classification then parts[#parts + 1] = d.classification end
     parts[#parts + 1] = d.ctype or (UnitClass("player"))
     self.metaLeft:SetText(table.concat(parts, " · "))
-    self.metaRight:SetText(self.isTarget and ("|cffc9302c" .. L["hostile"] .. "|r") or "")
+    self.metaRight:SetText(hostile and ("|cffc9302c" .. L["hostile"] .. "|r") or "")
 
     -- Portrait: eigenes Bild bzw. echtes Ziel, sonst Beispielbild
     if self.portraitOn then
         if not self.isTarget then
             SetPortraitTexture(self.portrait, "player")
-        elseif UnitExists("target") then
-            SetPortraitTexture(self.portrait, "target")
-        else
+        elseif UnitExists(self.unit) then
+            SetPortraitTexture(self.portrait, self.unit)
+        elseif d.portraitIcon then
             self.portrait:SetTexture(d.portraitIcon)
             self.portrait:SetTexCoord(0.08, 0.92, 0.08, 0.92)
+        else
+            SetPortraitTexture(self.portrait, "player")
         end
     end
 
@@ -525,7 +551,7 @@ function UF:PreviewUpdate()
 
     -- PvP: eigene Fraktion, beim Ziel die andere
     local faction = UnitFactionGroup("player")
-    if self.isTarget then
+    if hostile then
         faction = (faction == "Horde") and "Alliance" or (faction == "Alliance") and "Horde" or "FFA"
     end
     self:SetPvPIcon(PVP_ICON[faction] and faction or "FFA")
@@ -591,7 +617,7 @@ function UF:UpdateOrnament()
     local t = self.ornament
     t:SetTexture(info.file)
     -- Blizzard zeichnet die Drachen für ein Portrait rechts; links (Spieler) wird gespiegelt
-    if self.isTarget then
+    if self.portraitRight then
         t:SetTexCoord(info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord)
     else
         t:SetTexCoord(info.rightTexCoord, info.leftTexCoord, info.topTexCoord, info.bottomTexCoord)
@@ -604,13 +630,13 @@ function UF:UpdateOrnament()
     t:SetSize(info.width * f, info.height * f)
 
     -- Mitte auf das Portrait (bzw. ohne Portrait auf die Außenkante); X positiv = nach außen
-    local ox = (s.ornX or 0) * f * (self.isTarget and 1 or -1)
+    local ox = (s.ornX or 0) * f * (self.portraitRight and 1 or -1)
     local oy = (s.ornY or 0) * f
     t:ClearAllPoints()
     if s.portrait then
         t:SetPoint("CENTER", self.portraitFrame, "CENTER", ox, oy)
     else
-        t:SetPoint("CENTER", self.box, self.isTarget and "RIGHT" or "LEFT", ox, oy)
+        t:SetPoint("CENTER", self.box, self.portraitRight and "RIGHT" or "LEFT", ox, oy)
     end
     t:Show()
 end
@@ -652,24 +678,44 @@ function UF:ApplySettings()
     local s = ns.profile[self.key]
     self.portraitOn = s.portrait
 
-    self:SetScale(s.scale)
+    local scale = s.scale or 1
+    self:SetScale(scale * (BASE_SCALE[self.key] or 1))
     if not self.preview then
         self:ClearAllPoints()
         self:SetPoint(s.point, UIParent, s.point, s.x, s.y)
     end
+
+    -- Balkengröße: Prozentwert wird zur Skalierung addiert (1,2 und -20 % = 1,0).
+    -- Der Frame ist schon mit der Skalierung vergrößert, daher hier durch sie teilen.
+    -- Der Kasten passt sich dem breiteren Balken an, der schmalere sitzt mittig.
+    local function Pct(v) return math.max(0.1, scale + (v or 0) / 100) / scale end
+    local barW = W - 2 * PAD_X
+    local hpW = math.floor(barW * Pct(s.hpWidth) + 0.5)
+    local pwW = math.floor(barW * Pct(s.pwWidth) + 0.5)
+    local hpH = math.max(6, math.floor(HP_H * Pct(s.hpHeight) + 0.5))
+    local pwH = math.max(2, math.floor(PW_H * Pct(s.pwHeight) + 0.5))
+    local w = math.max(hpW, pwW) + 2 * PAD_X
+    local h = PAD + hpH + PAD + pwH + PAD
+    self.box:SetSize(w, h)
+    self.hp:SetSize(hpW, hpH)
+    self.pw:SetSize(pwW, pwH)
+    -- Schrift im Lebensbalken wächst mit dessen Höhe (Standardhöhe = 12)
+    local fontSize = math.max(8, math.min(20, math.floor(12 * hpH / HP_H + 0.5)))
+    self.nameText:SetFont(FONT, fontSize, "")
+    self.hpText:SetFont(FONT, fontSize, "")
 
     -- Portrait: Größe und Versatz (X positiv = weiter nach außen, Y positiv = nach oben)
     local size = s.portraitSize or PORTRAIT
     local offX, offY = s.portraitX or 0, s.portraitY or 0
     local overlap = s.portrait and math.max(0, P_OVER - offX) or 0
     local extra = s.portrait and math.max(0, size + 6 - overlap) or 0
-    self:SetSize(W + extra, BOX_H)
+    self:SetSize(w + extra, h)
     self:LayoutPortrait(size)
     self:SetPortraitShape(s.portraitShape)
 
     -- Kasten liegt auf der dem Portrait abgewandten Seite
     self.box:ClearAllPoints()
-    if self.isTarget then
+    if self.portraitRight then
         self.box:SetPoint("TOPLEFT")
     else
         self.box:SetPoint("TOPRIGHT")
@@ -684,6 +730,7 @@ function UF:ApplySettings()
         bar.shade:ClearAllPoints()
         bar.shade:SetPoint("BOTTOMLEFT", fill, "BOTTOMLEFT")
         bar.shade:SetPoint("BOTTOMRIGHT", fill, "BOTTOMRIGHT")
+        bar.shade:SetHeight(bar:GetHeight() / 2)
         bar.shade:SetShown(s.barShade)
     end
     self.heal:SetStatusBarTexture(tex)
@@ -696,28 +743,31 @@ function UF:ApplySettings()
     self.heal:SetPoint("BOTTOMLEFT", hpFill, "BOTTOMRIGHT")
 
     -- Balken laufen bis an den Rand, das Portrait liegt leicht darüber
+    -- Balken an der Portrait-Seite ausrichten: Ein schmalerer Balken endet dann außen,
+    -- statt eine Lücke zwischen Portrait und Balken zu lassen
+    local barSide = self.portraitRight and "RIGHT" or "LEFT"
+    local sx = self.portraitRight and -PAD_X or PAD_X
     self.hp:ClearAllPoints()
-    self.hp:SetPoint("TOPLEFT", self.box, "TOPLEFT", PAD_X, -PAD)
-    self.hp:SetPoint("TOPRIGHT", self.box, "TOPRIGHT", -PAD_X, -PAD)
+    self.hp:SetPoint("TOP" .. barSide, self.box, "TOP" .. barSide, sx, -PAD)
     self.pw:ClearAllPoints()
-    self.pw:SetPoint("TOPLEFT", self.hp, "BOTTOMLEFT", 0, -PAD)
-    self.pw:SetPoint("TOPRIGHT", self.hp, "BOTTOMRIGHT", 0, -PAD)
+    self.pw:SetPoint("BOTTOM" .. barSide, self.box, "BOTTOM" .. barSide, sx, PAD)
 
     -- nur die Texte rücken auf der Portrait-Seite ein
-    local leftIn  = self.isTarget and 0 or overlap
-    local rightIn = self.isTarget and overlap or 0
+    local leftIn  = self.portraitRight and 0 or overlap
+    local rightIn = self.portraitRight and overlap or 0
     self.hpText:ClearAllPoints()
     self.hpText:SetPoint("RIGHT", self.hp, "RIGHT", -(TEXT_PAD + rightIn), 0)
     self.nameText:ClearAllPoints()
     self.nameText:SetPoint("LEFT", self.hp, "LEFT", TEXT_PAD + leftIn, 0)
     self.nameText:SetPoint("RIGHT", self.hpText, "LEFT", -8, 0)
     self.metaLeft:ClearAllPoints()
-    self.metaLeft:SetPoint("TOPLEFT", self.pw, "BOTTOMLEFT", leftIn, -6)
+    -- am Kasten statt am Ressourcenbalken, damit die Zeile auch bei schmalem Balken bündig bleibt
+    self.metaLeft:SetPoint("TOPLEFT", self.box, "BOTTOMLEFT", PAD_X + leftIn, PAD - 6)
     self.metaRight:ClearAllPoints()
-    self.metaRight:SetPoint("TOPRIGHT", self.pw, "BOTTOMRIGHT", -rightIn, -6)
+    self.metaRight:SetPoint("TOPRIGHT", self.box, "BOTTOMRIGHT", -(PAD_X + rightIn), PAD - 6)
 
     -- Debuffs unter dem Frame, auf der Portrait-Seite eingerückt
-    local auraW = W - overlap
+    local auraW = math.max(40, w - overlap)
     self.auraW = auraW
     self.auras:ClearAllPoints()
     self.auras:SetWidthPx(auraW)
@@ -728,8 +778,8 @@ function UF:ApplySettings()
     b:ClearAllPoints()
     if s.buffPos == "side" then
         b:SetWidthPx(4 * ((s.buffSize or 22) + 4))
-        b:SetGrowth(self.isTarget, false)
-        if self.isTarget then
+        b:SetGrowth(self.portraitRight, false)
+        if self.portraitRight then
             b:SetPoint("TOPRIGHT", self.box, "TOPLEFT", -8, 0)
         else
             b:SetPoint("TOPLEFT", self.box, "TOPRIGHT", 8, 0)
@@ -748,7 +798,7 @@ function UF:ApplySettings()
 
     self.portraitFrame:SetShown(s.portrait)
     self.portraitFrame:ClearAllPoints()
-    if self.isTarget then
+    if self.portraitRight then
         self.portraitFrame:SetPoint("LEFT", self.box, "RIGHT", -P_OVER + offX, offY)
     else
         self.portraitFrame:SetPoint("RIGHT", self.box, "LEFT", P_OVER - offX, offY)
@@ -756,11 +806,11 @@ function UF:ApplySettings()
 
     -- PvP-Symbol: obere Außenecke des Portraits, ohne Portrait an der Außenkante des Kastens
     self.pvp:ClearAllPoints()
-    local side = self.isTarget and "TOPRIGHT" or "TOPLEFT"
+    local side = self.portraitRight and "TOPRIGHT" or "TOPLEFT"
     if s.portrait then
-        self.pvp:SetPoint("CENTER", self.portraitFrame, side, self.isTarget and -6 or 6, -6)
+        self.pvp:SetPoint("CENTER", self.portraitFrame, side, self.portraitRight and -6 or 6, -6)
     else
-        self.pvp:SetPoint("CENTER", self.box, side, self.isTarget and 4 or -4, 0)
+        self.pvp:SetPoint("CENTER", self.box, side, self.portraitRight and 4 or -4, 0)
     end
 
     -- Sichtbarkeit / Verschieben
@@ -832,14 +882,16 @@ local function CreateUnitFrame(key, unit, name, previewParent)
         -- Vorschau: normaler Frame ohne Klicks, Events und Kampfsperre
         local f = CreateFrame("Frame", nil, previewParent)
         for k, v in pairs(UF) do f[k] = v end
-        f.key, f.unit, f.isTarget, f.preview = key, unit, (unit == "target"), true
+        f.key, f.unit, f.isTarget, f.preview = key, unit, (unit ~= "player"), true
+        f.portraitRight = (unit == "target")   -- nur das Ziel hat das Portrait rechts
         BuildVisuals(f, unit)
         return f
     end
 
     local f = CreateFrame("Button", name, UIParent, "SecureUnitButtonTemplate")
     for k, v in pairs(UF) do f[k] = v end
-    f.key, f.unit, f.isTarget = key, unit, (unit == "target")
+    f.key, f.unit, f.isTarget = key, unit, (unit ~= "player")
+    f.portraitRight = (unit == "target")   -- Ziel des Ziels ist angeordnet wie der Spieler
 
     f:SetAttribute("unit", unit)
     f:SetAttribute("type1", "target")
@@ -881,6 +933,39 @@ local function CreateUnitFrame(key, unit, name, previewParent)
     else
         f:RegisterEvent("PLAYER_REGEN_DISABLED")
     end
+    if unit == "targettarget" then
+        -- Das Ziel wechselt sein Ziel: neue Einheit hinter "targettarget"
+        SafeRegisterUnit(f, "UNIT_TARGET", "target")
+        -- Für "targettarget" schickt der Client keine UNIT_*-Events (Leben, Ressource, Auren):
+        -- wie Blizzards eigener Frame regelmäßig nachfragen, solange er sichtbar ist.
+        f.pollElapsed, f.auraElapsed = 0, 0
+        f:SetScript("OnUpdate", function(self, el)
+            self.pollElapsed = self.pollElapsed + el
+            if self.pollElapsed < 0.2 then return end
+            self.auraElapsed = self.auraElapsed + self.pollElapsed
+            self.pollElapsed = 0
+            if not UnitExists(self.unit) then return end
+            -- andere Einheit (falls die GUID lesbar ist): alles neu, wie bei einem Zielwechsel
+            local guid = UnitGUID(self.unit)
+            if not IsSecret(guid) and guid ~= self.lastGUID then
+                self.lastGUID = guid
+                OnEvent(self, "UNIT_TARGET", "target")
+                return
+            end
+            self:Run("UpdateHealth")
+            self:Run("UpdatePower")
+            self:Run("UpdateName")
+            self:Run("UpdateMeta")
+            self:Run("UpdateMarker")
+            self:Run("UpdatePvP")
+            if self.auraElapsed >= 1 then
+                self.auraElapsed = 0
+                -- Auren-Container neu verbinden, damit er die Auren frisch einliest
+                self.unitChanged = true
+                self:Run("UpdateAuras")
+            end
+        end)
+    end
     f:SetScript("OnEvent", OnEvent)
     return f
 end
@@ -891,15 +976,25 @@ BuildVisuals = function(f, unit)
     local box = CreateFrame("Frame", nil, f)
     box:SetSize(W, BOX_H)
     f.box = box
-    local edge = box:CreateTexture(nil, "BACKGROUND", nil, -2)
-    edge:SetPoint("TOPLEFT", -1, 1); edge:SetPoint("BOTTOMRIGHT", 1, -1)
-    edge:SetColorTexture(0.23, 0.25, 0.30, 1)
-    local bg = box:CreateTexture(nil, "BACKGROUND", nil, -1)
-    bg:SetAllPoints()
-    bg:SetColorTexture(0, 0, 0, 1)
-
     f.hp = Bar(box, HP_H)
     f.pw = Bar(box, PW_H)
+
+    -- Hintergrund mit 1px-Kante je Balken: Sind die Balken verschieden breit, ergibt das
+    -- eine gestufte Form statt einer schwarzen Lücke. Alle Kanten liegen unter allen
+    -- schwarzen Flächen, sodass innen keine Kantenlinie zwischen den Balken sichtbar ist.
+    -- (Bei gleicher Breite sieht das genauso aus wie der frühere einzelne Kasten.)
+    local function Backing(bar, top, bottom)
+        local edge = box:CreateTexture(nil, "BACKGROUND", nil, -2)
+        edge:SetPoint("TOPLEFT", bar, "TOPLEFT", -PAD_X - 1, top + 1)
+        edge:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", PAD_X + 1, -bottom - 1)
+        edge:SetColorTexture(0.23, 0.25, 0.30, 1)
+        local bg = box:CreateTexture(nil, "BACKGROUND", nil, -1)
+        bg:SetPoint("TOPLEFT", bar, "TOPLEFT", -PAD_X, top)
+        bg:SetPoint("BOTTOMRIGHT", bar, "BOTTOMRIGHT", PAD_X, -bottom)
+        bg:SetColorTexture(0, 0, 0, 1)
+    end
+    Backing(f.hp, PAD, PAD)   -- deckt auch den Spalt zwischen den Balken ab
+    Backing(f.pw, 0, PAD)
 
     -- Eingehende Heilung: eigener Balken, der direkt an der Kante der Lebensfüllung
     -- beginnt und so breit ist wie der ganze Lebensbalken. Mit denselben Min/Max-Werten
@@ -967,7 +1062,7 @@ BuildVisuals = function(f, unit)
     lvlBg:SetColorTexture(0.35, 0.37, 0.42, 1)
     local lvlIn = Circle(bf, "OVERLAY", 1, 20)
     lvlIn:SetColorTexture(0.05, 0.04, 0.03, 1)
-    if f.isTarget then
+    if f.portraitRight then
         lvlBg:SetPoint("CENTER", pf, "BOTTOMRIGHT", -8, 8)
     else
         lvlBg:SetPoint("CENTER", pf, "BOTTOMLEFT", 8, 8)
@@ -1013,7 +1108,7 @@ BuildVisuals = function(f, unit)
     end
     local lbl = Text(mo, 12, "CENTER")
     lbl:SetPoint("CENTER")
-    lbl:SetText(f.isTarget and L["ForeverUnitFrames: Target"] or L["ForeverUnitFrames: Player"])
+    lbl:SetText(MOVE_LABEL[f.key] or f.key)
     mo:Hide()
     f.moveOverlay = mo
 end
@@ -1023,13 +1118,13 @@ end
 ---------------------------------------------------------------------------
 local SNAP_DIST = 12   -- Abstand in UI-Pixeln, ab dem am anderen Frame eingerastet wird
 
--- Mitte und halbe Breite eines Frames in UIParent-Einheiten, relativ zur Bildschirmmitte
+-- Mitte, halbe Breite und halbe Höhe eines Frames in UIParent-Einheiten, relativ zur Bildschirmmitte
 local function Geometry(frame)
     local cx, cy = frame:GetCenter()
     if not cx then return nil end
     local s = frame:GetScale()
-    local w = frame:GetWidth() * s
-    return cx * s - UIParent:GetWidth() / 2, cy * s - UIParent:GetHeight() / 2, w / 2
+    return cx * s - UIParent:GetWidth() / 2, cy * s - UIParent:GetHeight() / 2,
+        frame:GetWidth() * s / 2, frame:GetHeight() * s / 2
 end
 
 -- Rasterabstand des Bearbeitungsmodus, falls "Einrasten" an ist
@@ -1052,24 +1147,27 @@ local function Nearest(value, candidates)
 end
 
 function ns:SnapAndSave(frame)
-    local x, y, hw = Geometry(frame)
+    local x, y, hw, hh = Geometry(frame)
     if not x then return end
-    local other = ns.frames[frame.key == "player" and "target" or "player"]
-    local ox, oy, ohw
-    if other and other:IsShown() then ox, oy, ohw = Geometry(other) end
-
-    local snappedX, snappedY
-    if ox then
-        -- X: gleiche Mitte, gleiche linke/rechte Kante oder spiegelbildlich zur Bildschirmmitte
-        snappedX = Nearest(x, {
-            ox,
-            (ox - ohw) + hw,
-            (ox + ohw) - hw,
-            -ox,
-        })
-        -- Y: gleiche Höhe
-        snappedY = Nearest(y, { oy })
+    -- Einrastpunkte an allen anderen sichtbaren Frames
+    local xs, ys = {}, {}
+    for _, other in pairs(ns.frames) do
+        if other ~= frame and other:IsShown() then
+            local ox, oy, ohw, ohh = Geometry(other)
+            if ox then
+                -- X: gleiche Mitte, gleiche linke/rechte Kante oder spiegelbildlich zur Bildschirmmitte
+                xs[#xs + 1] = ox
+                xs[#xs + 1] = (ox - ohw) + hw
+                xs[#xs + 1] = (ox + ohw) - hw
+                xs[#xs + 1] = -ox
+                -- Y: gleiche Mitte, gleiche Ober- oder Unterkante
+                ys[#ys + 1] = oy
+                ys[#ys + 1] = (oy + ohh) - hh
+                ys[#ys + 1] = (oy - ohh) + hh
+            end
+        end
     end
+    local snappedX, snappedY = Nearest(x, xs), Nearest(y, ys)
 
     local g = GridSpacing()
     if g and g > 0 then
@@ -1090,6 +1188,7 @@ end
 function ns:CreateFrames()
     ns.frames.player = CreateUnitFrame("player", "player", "ForeverUnitFramesPlayer")
     ns.frames.target = CreateUnitFrame("target", "target", "ForeverUnitFramesTarget")
+    ns.frames.targettarget = CreateUnitFrame("targettarget", "targettarget", "ForeverUnitFramesTargetTarget")
 end
 
 -- Vorschau-Frame für die Einstellungen

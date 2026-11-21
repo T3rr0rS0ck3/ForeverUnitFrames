@@ -9,7 +9,7 @@ ForeverUnitFrames replaces the default player and target frames with sleek, mode
 ## Features
 
 ### Frames
-- Separate frames for **player** and **target**, each with its own scale and look
+- Separate frames for **player**, **target** and **target of target**, each with its own scale, bar sizes and look
 - Move them using Blizzard's **Edit Mode** (`/ff unlock`)
 - Optionally hides Blizzard's player and target frames
 - Optionally hides Blizzard's buff and debuff bars in the top right corner as well

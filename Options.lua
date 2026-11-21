@@ -55,7 +55,8 @@ local function Checkbox(parent, text, path, x, y)
     return cb
 end
 
-local function Slider(parent, text, path, minV, maxV, step, x, y, fmt)
+-- onSet (optional): eigene Behandlung statt einfach den Wert zu speichern
+local function Slider(parent, text, path, minV, maxV, step, x, y, fmt, onSet)
     fmt = fmt or "%.2f×"
     Label(parent, text, x, y)
     local s = CreateFrame("Slider", nil, parent)
@@ -78,8 +79,14 @@ local function Slider(parent, text, path, minV, maxV, step, x, y, fmt)
         v = math.floor(v / step + 0.5) * step
         val:SetText(format(fmt, v))
         if self.updating then return end
-        Set(path, v)
-        ns:ApplyAll()
+        if onSet then
+            onSet(v)
+            ns:ApplyAll()
+            Refresh()
+        else
+            Set(path, v)
+            ns:ApplyAll()
+        end
     end)
     s:SetScript("OnMouseWheel", function(self, delta)
         self:SetValue(self:GetValue() + delta * step)
@@ -276,7 +283,7 @@ local function BuildMain(page)
     guide:SetWordWrap(true)
     guide:SetText(table.concat({
         H .. L["Settings"] .. "|r",
-        L["On the left under ForeverUnitFrames you will find the pages Player, Target and Profiles. Each frame has its own size, color, texture and portrait there."],
+        L["On the left under ForeverUnitFrames you will find the pages Player, Target, Target of Target and Profiles. Each frame has its own size, color, texture and portrait there."],
         "",
         H .. L["Moving"] .. "|r",
         L["Open Edit Mode via Esc and drag the frames highlighted in blue. When released they snap to the other frame (same height, stacked or mirrored) and, if enabled, to the grid."],
@@ -325,6 +332,7 @@ end
 -- Spieler / Ziel: links Balken und Debuffs, rechts Portrait
 ---------------------------------------------------------------------------
 local PREVIEW_H = 230   -- Höhe des Vorschaubereichs oben auf der Seite
+local BAR_PCT = { -50, 50 }   -- Abweichung der Balkengröße in Prozent (0 = normale Größe)
 
 local function BuildPreview(content, key)
     local stage = CreateFrame("Frame", nil, content)
@@ -356,12 +364,55 @@ local function BuildUnit(content, key)
 
     -- linke Spalte
     Section(p, L["General"], LX, -4)
-    Slider(p, L["Scale"], { key, "scale" }, 0.5, 2.0, 0.05, LX, -30)
-    Checkbox(p, key == "player" and L["Show your debuffs"] or L["Show debuffs"], { key, "showDebuffs" }, LX - 2, -76)
-    local y = -104
-    if key == "target" then
-        Checkbox(p, L["Show only own debuffs"], { key, "onlyOwnDebuffs" }, LX - 2, -104)
-        y = -132
+    local y = -28
+    Slider(p, L["Scale"], { key, "scale" }, 0.5, 2.0, 0.05, LX, y)
+    -- Hinweis auf die Spaltenbreite begrenzen, damit er nicht in die rechte Spalte läuft
+    local hint = Label(p, L["Scale enlarges the whole frame. Bar sizes are added to it: 1.2 and -20% = 1.0."], LX, y - 38, 10)
+    hint:SetWidth(R - LX - 24)
+    hint:SetWordWrap(true)
+    y = y - 38 - math.max(14, hint:GetStringHeight()) - 14
+
+    -- Balkengröße als Abweichung in Prozent, je Balken; gekoppelt bleibt das Seitenverhältnis erhalten.
+    -- Gerechnet wird mit dem Faktor (1 + Wert/100), gespeichert die Abweichung.
+    local function Clamp(v) return math.max(BAR_PCT[1], math.min(BAR_PCT[2], math.floor(v + 0.5))) end
+    -- Wirksame Größe eines Balkens = Skalierung + Prozent/100
+    local function Factor(s, v) return (s.scale or 1) + v / 100 end
+    local function FromFactor(s, f) return Clamp((f - (s.scale or 1)) * 100) end
+    local function BarSize(title, prefix)
+        local wKey, hKey, linkKey = prefix .. "Width", prefix .. "Height", prefix .. "Linked"
+        local aspectKey = prefix .. "Aspect"
+        local function Aspect(s)
+            if not s[aspectKey] then s[aspectKey] = Factor(s, s[hKey]) / Factor(s, s[wKey]) end
+            return s[aspectKey]
+        end
+        Label(p, title, LX, y, 12, { 1, 1, 1 })
+        y = y - 20
+        Slider(p, L["Width"], { key, wKey }, BAR_PCT[1], BAR_PCT[2], 1, LX, y, "%+d%%", function(v)
+            local s = ns.profile[key]
+            if s[linkKey] then s[hKey] = FromFactor(s, Factor(s, v) * Aspect(s)) end
+            s[wKey] = v
+        end)
+        Slider(p, L["Height"], { key, hKey }, BAR_PCT[1], BAR_PCT[2], 1, LX, y - 46, "%+d%%", function(v)
+            local s = ns.profile[key]
+            if s[linkKey] then s[wKey] = FromFactor(s, Factor(s, v) / Aspect(s)) end
+            s[hKey] = v
+        end)
+        local link = Checkbox(p, L["Keep proportions"], { key, linkKey }, LX - 2, y - 92)
+        -- beim Koppeln das aktuelle Verhältnis merken, damit es beim Ziehen nicht wegdriftet
+        link:HookScript("OnClick", function()
+            local s = ns.profile[key]
+            s[aspectKey] = Factor(s, s[hKey]) / Factor(s, s[wKey])
+        end)
+        y = y - 128
+    end
+    BarSize(L["Health bar"], "hp")
+    BarSize(L["Power bar"], "pw")
+
+    Checkbox(p, key == "player" and L["Show your debuffs"] or L["Show debuffs"], { key, "showDebuffs" }, LX - 2, y)
+    y = y - 28
+    if key ~= "player" then
+        Checkbox(p, L["Show only own debuffs"], { key, "onlyOwnDebuffs" }, LX - 2, y)
+        y = y - 28
     end
     Checkbox(p, L["Show PvP icon"], { key, "showPvP" }, LX - 2, y)
     y = y - 28
@@ -388,7 +439,7 @@ local function BuildUnit(content, key)
         swTex:SetColorTexture(c.r, c.g, c.b, 1)
         swatch:SetShown(ns.profile[key].healthColor == "custom")
     end
-    if key == "target" then
+    if key ~= "player" then
         Label(p, L["NPCs always use the reaction color."], LX, y - 46, 10)
     end
 
@@ -417,7 +468,7 @@ local function BuildUnit(content, key)
     y = y - 118
     Section(p, L["Ornament (Blizzard dragon)"], LX, y)
     local ornOpts = {}
-    if key == "target" then ornOpts[#ornOpts + 1] = { "auto", L["Automatic (by enemy)"] } end
+    if key ~= "player" then ornOpts[#ornOpts + 1] = { "auto", L["Automatic (by enemy)"] } end
     for _, o in ipairs({
         { "none", L["None"] }, { "elite", L["Elite (gold)"] },
         { "rareelite", L["Rare Elite (silver)"] }, { "worldboss", L["Boss"] },
@@ -527,10 +578,12 @@ function ns:CreateOptions()
     main:Hide()
     main:SetScript("OnShow", Refresh)
     BuildMain(MakeScroll(main, 0, 820))
-    local player, playerC = NewPage(L["Player"], 650 + PREVIEW_H)
+    local player, playerC = NewPage(L["Player"], 950 + PREVIEW_H)
     BuildUnit(playerC, "player")
-    local target, targetC = NewPage(L["Target"], 650 + PREVIEW_H)
+    local target, targetC = NewPage(L["Target"], 980 + PREVIEW_H)
     BuildUnit(targetC, "target")
+    local tot, totC = NewPage(L["Target of Target"], 1010 + PREVIEW_H)
+    BuildUnit(totC, "targettarget")
     local prof, profC = NewPage(L["Profiles"])
     BuildProfiles(profC)
 
@@ -538,6 +591,7 @@ function ns:CreateOptions()
         local cat = Settings.RegisterCanvasLayoutCategory(main, "ForeverUnitFrames")
         Settings.RegisterCanvasLayoutSubcategory(cat, player, L["Player"])
         Settings.RegisterCanvasLayoutSubcategory(cat, target, L["Target"])
+        Settings.RegisterCanvasLayoutSubcategory(cat, tot, L["Target of Target"])
         Settings.RegisterCanvasLayoutSubcategory(cat, prof, L["Profiles"])
         Settings.RegisterAddOnCategory(cat)
         ns.settingsCategory = cat
@@ -545,8 +599,9 @@ function ns:CreateOptions()
         main.name = "ForeverUnitFrames"
         player.name, player.parent = L["Player"], "ForeverUnitFrames"
         target.name, target.parent = L["Target"], "ForeverUnitFrames"
+        tot.name, tot.parent = L["Target of Target"], "ForeverUnitFrames"
         prof.name, prof.parent = L["Profiles"], "ForeverUnitFrames"
-        for _, pg in ipairs({ main, player, target, prof }) do InterfaceOptions_AddCategory(pg) end
+        for _, pg in ipairs({ main, player, target, tot, prof }) do InterfaceOptions_AddCategory(pg) end
         ns.legacyPanel = main
     end
 end

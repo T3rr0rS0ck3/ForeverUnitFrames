@@ -11,6 +11,9 @@ ns.frames = {}
 local function UnitDefaults(x, ornament)
     return {
         scale = 1.0,
+        -- Balkengröße in Prozent relativ zur Skalierung: 0 = normal, -30 = 30 % kleiner, +20 = 20 % größer
+        hpWidth = 0, hpHeight = 0, hpLinked = true,   -- Lebensbalken
+        pwWidth = 0, pwHeight = 0, pwLinked = true,   -- Ressourcenbalken
         healthColor = "class",               -- class | health | custom
         customColor = { r = 0.25, g = 0.70, b = 0.35 },
         textMode = "both",                   -- both | pct | val | none
@@ -37,6 +40,15 @@ ns.defaults = {
     locked       = true,    -- nur ohne Blizzard-Bearbeitungsmodus genutzt
     player = UnitDefaults(-280, "none"),
     target = UnitDefaults(280, "auto"),
+    -- Ziel des Ziels: dieselben Einstellungen wie das Ziel. Skalierung 1 ist bei ihm schon
+    -- kleiner (Grundgröße in Frames.lua). Position in Frame-Einheiten, also durch die
+    -- Grundgröße geteilt: ≈ 560 / -180 auf dem Bildschirm
+    targettarget = (function()
+        local t = UnitDefaults(800, "auto")
+        t.y = -257
+        t.portrait = true
+        return t
+    end)(),
 }
 
 -- Ältere Profile hatten Farbe/Text/Textur für beide Frames gemeinsam: auf beide verteilen

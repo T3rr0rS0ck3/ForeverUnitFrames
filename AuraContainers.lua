@@ -239,7 +239,7 @@ function ns:LayoutAuraContainers(f, auraW)
 
     b:ClearAllPoints()
     if s.buffPos == "side" then
-        if f.isTarget then
+        if f.portraitRight then
             b:SetPoint("TOPRIGHT", f.buffs, "TOPRIGHT", 0, 0)
             b:SetFlowLayoutAnchorPoint("TOPRIGHT")
             b:SetFlowLayoutGrowthDirection(Flow.Left, Flow.Down)
@@ -315,7 +315,7 @@ end
 
 -- Für /ff auras: was der Container kann und wie er steht
 function ns:DebugAuraContainers(out)
-    for _, unit in ipairs({ "player", "target" }) do
+    for _, unit in ipairs({ "player", "target", "targettarget" }) do
         local fr = ns.frames and ns.frames[unit]
         local ac = fr and fr.ac
         if not ac then

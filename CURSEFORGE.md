@@ -9,7 +9,7 @@ ForeverUnitFrames ersetzt die Standard-Rahmen für Spieler und Ziel durch schlan
 ## Features
 
 ### Frames
-- Eigene Frames für **Spieler** und **Ziel**, jeweils mit eigener Skalierung und eigener Optik
+- Eigene Frames für **Spieler**, **Ziel** und **Ziel des Ziels**, jeweils mit eigener Skalierung, Balkengröße und Optik
 - Verschieben über Blizzards **Bearbeitungsmodus** (`/ff unlock`)
 - Blizzards Spieler-/Zielrahmen werden auf Wunsch ausgeblendet
 - Optional lassen sich auch Blizzards Buff- und Debuffleiste oben rechts ausblenden

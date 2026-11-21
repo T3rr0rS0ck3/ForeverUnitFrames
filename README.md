@@ -8,7 +8,7 @@ Clean, flat **player and target frames** for World of Warcraft with buffs, debuf
 
 ## Features
 
-- **Separate player and target frames** – own scale, colors, texture and portrait for each
+- **Separate player, target and target-of-target frames** – own scale, bar sizes, colors, texture and portrait for each
 - **Health bars** – class color, by health or custom color; four text modes; built-in textures plus everything from [LibSharedMedia](https://www.curseforge.com/wow/addons/libsharedmedia-3-0)
 - **Portraits** in six shapes (round, rounded, square, diamond, hexagon, octagon) with adjustable size and position
 - **Buffs & debuffs** – filters (own, short, dispellable/stealable), adjustable icon size and count, highlighting of dispellable enemy buffs

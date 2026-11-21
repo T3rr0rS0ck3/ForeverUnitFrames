@@ -45,6 +45,8 @@ local T = {
     ["Sample"] = "Beispiel",
     ["ForeverUnitFrames: Target"] = "ForeverUnitFrames: Ziel",
     ["ForeverUnitFrames: Player"] = "ForeverUnitFrames: Spieler",
+    ["Target of Target"] = "Ziel des Ziels",
+    ["ForeverUnitFrames: Target of Target"] = "ForeverUnitFrames: Ziel des Ziels",
 
     -- Beispieldaten der Vorschau
     ["Mark of the Wild"] = "Mal der Wildnis",
@@ -70,8 +72,8 @@ local T = {
     ["Flat player and target frames with debuffs"] = "Flache Spieler- und Ziel-Frames mit Debuffs",
     ["Version"] = "Version",
     ["Settings"] = "Einstellungen",
-    ["On the left under ForeverUnitFrames you will find the pages Player, Target and Profiles. Each frame has its own size, color, texture and portrait there."] =
-        "Links unter ForeverUnitFrames findest du die Seiten Spieler, Ziel und Profile. Jeder Frame hat dort seine eigene Größe, Farbe, Textur und sein eigenes Portrait.",
+    ["On the left under ForeverUnitFrames you will find the pages Player, Target, Target of Target and Profiles. Each frame has its own size, color, texture and portrait there."] =
+        "Links unter ForeverUnitFrames findest du die Seiten Spieler, Ziel, Ziel des Ziels und Profile. Jeder Frame hat dort seine eigene Größe, Farbe, Textur und sein eigenes Portrait.",
     ["Moving"] = "Verschieben",
     ["Open Edit Mode via Esc and drag the frames highlighted in blue. When released they snap to the other frame (same height, stacked or mirrored) and, if enabled, to the grid."] =
         "Über Esc den Bearbeitungsmodus öffnen und die blau markierten Frames ziehen. Beim Loslassen rasten sie am anderen Frame ein (gleiche Höhe, untereinander oder spiegelbildlich) und, falls aktiviert, am Raster.",
@@ -103,6 +105,13 @@ local T = {
     ["Preview (sample data)"] = "Vorschau (Beispieldaten)",
     ["General"] = "Allgemein",
     ["Scale"] = "Skalierung",
+    ["Scale enlarges the whole frame. Bar sizes are added to it: 1.2 and -20% = 1.0."] =
+        "Skalierung vergrößert den ganzen Frame. Die Balkengröße wird dazugerechnet: 1,2 und -20 % = 1,0.",
+    ["Health bar"] = "Lebensbalken",
+    ["Power bar"] = "Ressourcenbalken",
+    ["Width"] = "Breite",
+    ["Height"] = "Höhe",
+    ["Keep proportions"] = "Seitenverhältnis halten",
     ["Show your debuffs"] = "Deine Debuffs anzeigen",
     ["Show debuffs"] = "Debuffs anzeigen",
     ["Show only own debuffs"] = "Nur eigene Debuffs zeigen",
