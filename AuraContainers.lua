@@ -106,12 +106,12 @@ local function InitButton(btn, style, size)
 
     -- Schrift vor dem Binden setzen: Blizzard schreibt sofort hinein
     btn.Count = btn:CreateFontString(nil, "OVERLAY")
-    btn.Count:SetFont(STANDARD_TEXT_FONT, 11, "OUTLINE")
+    ns.SetFont(btn.Count, 11, "OUTLINE")
     btn.Count:SetPoint("BOTTOMRIGHT", 1, 0)
     btn:SetApplicationCount(btn.Count)
 
     btn.Time = btn:CreateFontString(nil, "OVERLAY")
-    btn.Time:SetFont(STANDARD_TEXT_FONT, 10, "OUTLINE")
+    ns.SetFont(btn.Time, 10, "OUTLINE")
     btn.Time:SetPoint("TOP", btn, "BOTTOM", 0, -2)
     btn:SetDurationText(btn.Time, Formatter and { textFormatter = Formatter } or nil)
 

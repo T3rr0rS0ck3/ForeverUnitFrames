@@ -262,11 +262,11 @@ local function CreateIcon(parent)
     over:SetAllPoints()
     over:SetFrameLevel(b.cd:GetFrameLevel() + 1)
     b.count = over:CreateFontString(nil, "OVERLAY")
-    b.count:SetFont(STANDARD_TEXT_FONT, 11, "OUTLINE")
+    ns.SetFont(b.count, 11, "OUTLINE")
     b.count:SetPoint("BOTTOMRIGHT", 1, 0)
 
     b.time = b:CreateFontString(nil, "OVERLAY")
-    b.time:SetFont(STANDARD_TEXT_FONT, 10, "OUTLINE")
+    ns.SetFont(b.time, 10, "OUTLINE")
     b.time:SetPoint("TOP", b, "BOTTOM", 0, -2)
     return b
 end

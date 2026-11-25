@@ -13,7 +13,6 @@ local P_OVER   = 12    -- so weit ragt das Portrait ohne Versatz in den Kasten h
 local TEXT_PAD = 7     -- Abstand der Texte zum Balkenrand
 -- Grundgröße je Frame: Skalierung 1 entspricht diesem Faktor (Ziel des Ziels ist kleiner)
 local BASE_SCALE = { player = 1, target = 1, targettarget = 0.7 }
-local FONT     = STANDARD_TEXT_FONT
 local FLAT     = "Interface\\Buttons\\WHITE8X8"
 local MASK     = "Interface\\CharacterFrame\\TempPortraitAlphaMask"
 local MEDIA    = "Interface\\AddOns\\" .. ADDON .. "\\Media\\"
@@ -126,7 +125,7 @@ end
 
 local function Text(parent, size, justify)
     local fs = parent:CreateFontString(nil, "OVERLAY")
-    fs:SetFont(FONT, size, "")
+    ns.SetFont(fs, size, "")
     fs:SetShadowColor(0, 0, 0, 1)
     fs:SetShadowOffset(1, -1)
     fs:SetJustifyH(justify or "LEFT")
@@ -701,8 +700,8 @@ function UF:ApplySettings()
     self.pw:SetSize(pwW, pwH)
     -- Schrift im Lebensbalken wächst mit dessen Höhe (Standardhöhe = 12)
     local fontSize = math.max(8, math.min(20, math.floor(12 * hpH / HP_H + 0.5)))
-    self.nameText:SetFont(FONT, fontSize, "")
-    self.hpText:SetFont(FONT, fontSize, "")
+    ns.SetFont(self.nameText, fontSize, "")
+    ns.SetFont(self.hpText, fontSize, "")
 
     -- Portrait: Größe und Versatz (X positiv = weiter nach außen, Y positiv = nach oben)
     local size = s.portraitSize or PORTRAIT
@@ -1069,7 +1068,7 @@ BuildVisuals = function(f, unit)
     end
     lvlIn:SetPoint("CENTER", lvlBg)
     f.levelText = bf:CreateFontString(nil, "OVERLAY", nil, 2)
-    f.levelText:SetFont(FONT, 10, "OUTLINE")
+    ns.SetFont(f.levelText, 10, "OUTLINE")
     f.levelText:SetPoint("CENTER", lvlBg, "CENTER", 0, 0)
 
     -- Schlachtzugsmarker mittig über dem Kasten

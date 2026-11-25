@@ -5,6 +5,62 @@ local L = ns.L
 ns.frames = {}
 
 ---------------------------------------------------------------------------
+-- Schrift mit Fallback für alle Schriftsysteme
+-- SetFont(Datei) kennt nur die eine Schriftdatei: Namen in Kyrillisch,
+-- Koreanisch oder Chinesisch würden als Kästchen erscheinen. Eine Font-Familie
+-- wählt je nach Zeichen automatisch die passende Datei (wie Blizzards Frames).
+---------------------------------------------------------------------------
+local ALPHABETS = { "roman", "korean", "simplifiedchinese", "traditionalchinese", "russian" }
+local FALLBACK_FILES = {
+    roman              = STANDARD_TEXT_FONT,
+    korean             = "Fonts\\2002.TTF",
+    simplifiedchinese  = "Fonts\\ARKai_T.ttf",
+    traditionalchinese = "Fonts\\blei00d.TTF",
+    russian            = "Fonts\\FRIZQT___CYR.TTF",
+}
+local fontCache = {}
+
+local function AlphabetFile(alphabet)
+    local base = GameFontNormal
+    if base and base.GetFontObjectForAlphabet then
+        local obj = base:GetFontObjectForAlphabet(alphabet)
+        local file = obj and obj:GetFont()
+        if file then return file end
+    end
+    return FALLBACK_FILES[alphabet]
+end
+
+local function FontFamily(size, flags)
+    if not CreateFontFamily then return nil end
+    local key = size .. "|" .. flags
+    if fontCache[key] == nil then
+        local members = {}
+        for i, alphabet in ipairs(ALPHABETS) do
+            members[i] = { alphabet = alphabet, file = AlphabetFile(alphabet), height = size, flags = flags }
+        end
+        local name = ADDON .. "Font" .. size .. (flags ~= "" and flags or "NONE")
+        local ok, font = pcall(CreateFontFamily, name, members)
+        fontCache[key] = ok and font or false
+    end
+    return fontCache[key] or nil
+end
+
+-- Ersatz für fs:SetFont(STANDARD_TEXT_FONT, size, flags); Schatten bleibt erhalten
+function ns.SetFont(fs, size, flags)
+    flags = flags or ""
+    local font = FontFamily(size, flags)
+    if not font then
+        fs:SetFont(STANDARD_TEXT_FONT, size, flags)
+        return
+    end
+    local sr, sg, sb, sa = fs:GetShadowColor()
+    local sx, sy = fs:GetShadowOffset()
+    fs:SetFontObject(font)
+    if sx and sy then fs:SetShadowOffset(sx, sy) end
+    if sr then fs:SetShadowColor(sr, sg, sb, sa) end
+end
+
+---------------------------------------------------------------------------
 -- Standardwerte eines Profils
 ---------------------------------------------------------------------------
 -- Optik-Einstellungen, die Spieler und Ziel jeweils einzeln haben
