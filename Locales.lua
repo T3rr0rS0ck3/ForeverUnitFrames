@@ -130,6 +130,7 @@ local T = {
     ["Texture"] = "Textur",
     ["Shading (dark lower half)"] = "Schattierung (dunkle untere Hälfte)",
     ["Show incoming heals"] = "Eingehende Heilung anzeigen",
+    ["Show 5-second rule and mana ticks"] = "5-Sekunden-Regel und Mana-Ticks anzeigen",
     ["Ornament (Blizzard dragon)"] = "Ornament (Blizzard-Drache)",
     ["Automatic (by enemy)"] = "Automatisch (nach Gegner)",
     ["None"] = "Keins",

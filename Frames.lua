@@ -292,6 +292,109 @@ function UF:UpdatePower()
     self.pw:SetStatusBarColor(c.r, c.g, c.b)
 end
 
+---------------------------------------------------------------------------
+-- 5-Sekunden-Regel (nur Spieler, nur Classic-Clients)
+-- Nach dem Ausgeben von Mana regeneriert Willenskraft 5 s lang nicht. Ein Funke läuft
+-- in dieser Zeit einmal über den Manabalken. Danach zeigt er den 2-s-Takt der
+-- Mana-Ticks.
+-- Manche Clients geben das Mana als geheimen Wert zurück. Dann wird ohne Werte
+-- gearbeitet: Ausgabe = erfolgreicher Zauber mit Manakosten, Tick = Mana-Änderung,
+-- die zu keinem Zauber gehört. Volles Mana erkennt man daran, dass keine Ticks kommen.
+---------------------------------------------------------------------------
+local MANA = (Enum and Enum.PowerType and Enum.PowerType.Mana) or 0
+local FSR_TIME, TICK_TIME = 5, 2
+local SPEND_WINDOW = 0.5           -- so nah liegen Zauber und zugehörige Mana-Änderung
+local TICK_GRACE = TICK_TIME + 0.5 -- ohne Tick so lange: Mana voll, Tick-Funke aus
+local GetCost = (C_Spell and C_Spell.GetSpellPowerCost) or GetSpellPowerCost
+-- Retail hat die Regel nicht mehr
+ns.HAS_FIVE_SECOND_RULE = not (WOW_PROJECT_ID and WOW_PROJECT_MAINLINE and WOW_PROJECT_ID == WOW_PROJECT_MAINLINE)
+
+-- true = kostet Mana, false = kostet kein Mana, nil = unbekannt
+local function CostsMana(spellID)
+    if not GetCost or not spellID or IsSecret(spellID) then return nil end
+    local costs = GetCost(spellID)
+    if type(costs) ~= "table" or IsSecret(costs) then return nil end
+    for _, c in ipairs(costs) do
+        local t = Clean(c.type)
+        if t == nil then return nil end
+        if t == MANA then
+            local amount, pct = c.cost, c.costPercent
+            if IsSecret(amount) or IsSecret(pct) then return true end
+            if (amount or 0) > 0 or (pct or 0) > 0 then return true end
+        end
+    end
+    return false
+end
+
+function UF:FSRSpend(t)
+    self.fsrEnd = t + FSR_TIME
+    -- die Mana-Änderung dieser Ausgabe kam evtl. kurz vorher und wurde als Tick gezählt
+    if self.fsrTickSetAt and t - self.fsrTickSetAt < SPEND_WINDOW then
+        self.fsrTick, self.fsrTickSetAt = self.fsrPrevTick, nil
+    end
+end
+
+function UF:FSRTick(t)
+    self.fsrAlive = t
+    -- Anstieg kurz nach einem Tick ist kein Tick (z. B. Trank): Takt nicht verschieben
+    if self.fsrTick and t - self.fsrTick <= 1.5 then return end
+    self.fsrPrevTick, self.fsrTick, self.fsrTickSetAt = self.fsrTick, t, t
+end
+
+local function FSROnEvent(drv, event, unit, a2, a3)
+    if not drv:IsShown() then return end
+    local f, now = drv.owner, GetTime()
+    if event == "UNIT_SPELLCAST_SUCCEEDED" then
+        local ok, costs = pcall(CostsMana, a3)
+        if not ok then costs = nil end
+        if costs == true then
+            f:FSRSpend(now)
+        elseif costs == nil then
+            -- Kosten unbekannt: Mana-Änderung kurz davor oder danach entscheidet
+            f.fsrCastAt = now
+            if f.fsrPowerAt and now - f.fsrPowerAt < SPEND_WINDOW then f:FSRSpend(now) end
+        end
+        return
+    end
+    -- UNIT_POWER_FREQUENT: nur Mana
+    if not IsSecret(a2) and a2 ~= "MANA" then return end
+    f.fsrPowerAt = now
+    local mana = UnitPower("player", MANA)
+    if not IsSecret(mana) then
+        local last = mana and f.fsrMana
+        f.fsrMana = mana
+        local max = UnitPowerMax("player", MANA)
+        f.fsrFull = not IsSecret(max) and max and mana >= max
+        if last and mana < last then f:FSRSpend(now)
+        elseif last and mana > last then f:FSRTick(now) end
+        return
+    end
+    f.fsrMana = nil
+    if f.fsrCastAt and now - f.fsrCastAt < SPEND_WINDOW then f:FSRSpend(f.fsrCastAt); return end
+    if f.fsrEnd and now - (f.fsrEnd - FSR_TIME) < SPEND_WINDOW then return end   -- gerade Ausgabe erkannt
+    f:FSRTick(now)
+end
+
+local function FSROnUpdate(drv)
+    local f = drv.owner
+    local spark = f.fsrSpark
+    local ptype = UnitPowerType("player")
+    if IsSecret(ptype) or ptype ~= MANA then spark:Hide(); f.fsrLine:Hide(); return end
+    local now, pos = GetTime(), nil
+    if f.fsrEnd and now < f.fsrEnd then
+        pos = 1 - (f.fsrEnd - now) / FSR_TIME
+        spark:SetAlpha(1); f.fsrLine:SetAlpha(1)
+    elseif f.fsrTick and not f.fsrFull
+        and ((f.fsrAlive and now - f.fsrAlive < TICK_GRACE) or (f.fsrEnd and now - f.fsrEnd < TICK_GRACE)) then
+        pos = ((now - f.fsrTick) % TICK_TIME) / TICK_TIME
+        spark:SetAlpha(0.7); f.fsrLine:SetAlpha(0.7)
+    end
+    if not pos then spark:Hide(); f.fsrLine:Hide(); return end
+    spark:ClearAllPoints()
+    spark:SetPoint("CENTER", f.pw, "LEFT", pos * f.pw:GetWidth(), 0)
+    spark:Show(); f.fsrLine:Show()
+end
+
 function UF:UpdateName()
     local unit = self.unit
     if UnitExists(unit) then
@@ -735,6 +838,12 @@ function UF:ApplySettings()
     self.heal:SetStatusBarTexture(tex)
     self.heal:GetStatusBarTexture():SetHorizTile(false)
     self.heal:SetShown(s.showHealPrediction ~= false)
+    if self.fsr then
+        local on = s.showFiveSecondRule ~= false
+        self.fsrSpark:SetSize(16, math.max(12, pwH * 2.6))
+        self.fsr:SetShown(on)
+        if not on then self.fsrSpark:Hide(); self.fsrLine:Hide() end
+    end
     -- Anker neu setzen, falls SetStatusBarTexture ein neues Füllobjekt erzeugt hat
     local hpFill = self.hp:GetStatusBarTexture()
     self.heal:ClearAllPoints()
@@ -1012,6 +1121,33 @@ BuildVisuals = function(f, unit)
     heal:SetWidth(W)
     f.hp:HookScript("OnSizeChanged", function(_, w) if w and w > 0 then heal:SetWidth(w) end end)
     f.heal = heal
+
+    -- 5-Sekunden-Regel: Funke auf dem Manabalken, angetrieben von einem eigenen Frame,
+    -- dessen OnUpdate nur läuft, solange die Option an ist
+    if f.key == "player" and not f.preview and ns.HAS_FIVE_SECOND_RULE then
+        local sparkLayer = CreateFrame("Frame", nil, f.pw)
+        sparkLayer:SetAllPoints()
+        sparkLayer:SetFrameLevel(f.pw:GetFrameLevel() + 2)
+        local spark = sparkLayer:CreateTexture(nil, "OVERLAY")
+        spark:SetTexture("Interface\\CastingBar\\UI-CastingBar-Spark")
+        spark:SetBlendMode("ADD")
+        spark:Hide()
+        f.fsrSpark = spark
+        -- zweite Lage desselben Leuchtens: additiv doppelt so hell, Form bleibt ein Funke
+        local line = sparkLayer:CreateTexture(nil, "OVERLAY", nil, 1)
+        line:SetTexture(spark:GetTexture() or "Interface\\CastingBar\\UI-CastingBar-Spark")
+        line:SetBlendMode("ADD")
+        line:SetAllPoints(spark)
+        line:Hide()
+        f.fsrLine = line
+        f.fsr = CreateFrame("Frame", nil, f)
+        f.fsr.owner = f
+        f.fsr:Hide()
+        f.fsr:SetScript("OnUpdate", FSROnUpdate)
+        f.fsr:SetScript("OnEvent", FSROnEvent)
+        pcall(f.fsr.RegisterUnitEvent, f.fsr, "UNIT_POWER_FREQUENT", "player")
+        pcall(f.fsr.RegisterUnitEvent, f.fsr, "UNIT_SPELLCAST_SUCCEEDED", "player")
+    end
 
     local textLayer = CreateFrame("Frame", nil, f.hp)
     textLayer:SetAllPoints()

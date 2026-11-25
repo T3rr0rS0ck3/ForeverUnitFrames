@@ -76,6 +76,7 @@ local function UnitDefaults(x, ornament)
         barTexture = "Flach",
         barShade = true,                     -- dunkle untere Hälfte für etwas Tiefe
         showHealPrediction = true,           -- eingehende Heilung als heller Balken hinter dem Leben
+        showFiveSecondRule = true,           -- nur Spieler (Classic): Funke für 5-Sekunden-Regel und Mana-Ticks
         portrait = false, portraitShape = "round",
         portraitSize = 70, portraitX = 0, portraitY = 0,
         showDebuffs = true, onlyOwnDebuffs = false,

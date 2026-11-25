@@ -463,6 +463,10 @@ local function BuildUnit(content, key)
         function(v) ns.profile[key].barTexture = v; ns:ApplyAll() end)
     Checkbox(p, L["Shading (dark lower half)"], { key, "barShade" }, LX - 2, y - 50)
     Checkbox(p, L["Show incoming heals"], { key, "showHealPrediction" }, LX - 2, y - 76)
+    if key == "player" and ns.HAS_FIVE_SECOND_RULE then
+        Checkbox(p, L["Show 5-second rule and mana ticks"], { key, "showFiveSecondRule" }, LX - 2, y - 102)
+        y = y - 26
+    end
 
     -- Drachen-Ornament (linke Spalte unten)
     y = y - 118
@@ -578,7 +582,7 @@ function ns:CreateOptions()
     main:Hide()
     main:SetScript("OnShow", Refresh)
     BuildMain(MakeScroll(main, 0, 820))
-    local player, playerC = NewPage(L["Player"], 950 + PREVIEW_H)
+    local player, playerC = NewPage(L["Player"], 980 + PREVIEW_H)
     BuildUnit(playerC, "player")
     local target, targetC = NewPage(L["Target"], 980 + PREVIEW_H)
     BuildUnit(targetC, "target")
